@@ -1,0 +1,32 @@
+{
+  "name": "chess-analyzer",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "copy-engine": "node scripts/copy-engine.cjs",
+    "postinstall": "node scripts/copy-engine.cjs"
+  },
+  "dependencies": {
+    "@chess-openings/eco.json": "^2.2.2",
+    "chess.js": "^1.4.0",
+    "next": "16.3.6",
+    "react": "19.2.8",
+    "react-chessboard": "^5.12.1",
+    "react-dom": "19.2.8",
+    "stockfish": "^19.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.6",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}
