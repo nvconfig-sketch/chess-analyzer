@@ -184,12 +184,14 @@ export function AnalysisPanel({
             {explanation.source === "local" ? (
               <span className="mt-2 block text-xs text-zinc-400" dir="auto">
                 {explanation.language === "he"
-                  ? "הערת הדרכה מקומית. הגדירו GEMINI_API_KEY לקבלת הסברים מ-Gemini."
-                  : "Local coach note. Set GEMINI_API_KEY for Gemini explanations."}
+                  ? "הערת הדרכה מקומית. הוסיפו מפתח ספק בהגדרות AI להסברים מותאמים אישית."
+                  : "Local coach note. Add a provider key in AI settings for personalized explanations."}
               </span>
             ) : (
               <span className="mt-2 block text-xs text-zinc-400" dir="auto">
-                {explanation.language === "he" ? "נוצר באמצעות Gemini." : "Generated with Gemini."}
+                {explanation.language === "he"
+                  ? `נוצר באמצעות ${explanation.source === "openai" ? "OpenAI" : "Gemini"}.`
+                  : `Generated with ${explanation.source === "openai" ? "OpenAI" : "Gemini"}.`}
               </span>
             )}
           </p>

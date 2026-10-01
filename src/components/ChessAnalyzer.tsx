@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useMemo } from "react";
+import { AiSettings } from "@/components/AiSettings";
 import { AnalysisPanel } from "@/components/AnalysisPanel";
 import { EvalBar } from "@/components/EvalBar";
 import { EvaluationGraph } from "@/components/EvaluationGraph";
@@ -100,7 +101,10 @@ export function ChessAnalyzer() {
             </p>
             <h1 className="break-words text-lg font-semibold">{gameTitle(gameState.game.headers)}</h1>
           </div>
-          <ThemeToggle theme={theme} onToggle={toggleTheme} />
+          <div className="flex shrink-0 items-center gap-2">
+            <AiSettings />
+            <ThemeToggle theme={theme} onToggle={toggleTheme} />
+          </div>
         </div>
       </header>
 

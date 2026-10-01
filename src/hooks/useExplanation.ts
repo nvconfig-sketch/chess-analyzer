@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useAiSettings } from "@/hooks/useAiSettings";
+import { requestClientExplanation } from "@/lib/client-explanation";
+import type { AiProvider, AiSettings } from "@/lib/ai-settings";
 import type {
   AnalyzedMove,
   BilingualExplanation,
@@ -12,12 +15,14 @@ import type {
 import { formatWhiteCp, whiteCpFromFen } from "@/lib/eval";
 
 export function useExplanation(move: AnalyzedMove | null, opening: OpeningContext | null) {
+  const aiSettings = useAiSettings();
   const [resultState, setResultState] = useState<{
     move: AnalyzedMove;
     opening: OpeningContext | null;
+    settings: AiSettings;
     explanation: BilingualExplanation;
     error: string | null;
-    source: "ai" | "local" | null;
+    source: "ai" | "local" | AiProvider | null;
   } | null>(null);
   const [language, setLanguage] = useState<ExplanationLanguage>("en");
 
@@ -26,6 +31,8 @@ export function useExplanation(move: AnalyzedMove | null, opening: OpeningContex
 
     const controller = new AbortController();
     const settledOpening = getSettledOpening(opening);
+    const provider = aiSettings.provider;
+    const apiKey = aiSettings.apiKeys[provider].trim();
     const payload: ExplainRequest = {
       fen: move.beforeFen,
       moveSan: move.san,
@@ -41,28 +48,37 @@ export function useExplanation(move: AnalyzedMove | null, opening: OpeningContex
       opening: settledOpening,
     };
 
-    fetch("/api/explain", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-      signal: controller.signal,
-    })
-      .then(async (response) => {
-        const data = (await response.json()) as {
-          explanation?: BilingualExplanation;
-          source?: "ai" | "local";
-          error?: string;
-        };
-        if (!response.ok) throw new Error(data.error ?? "Explanation failed");
-        if (!data.explanation?.en || !data.explanation.he) {
-          throw new Error("Incomplete bilingual explanation");
-        }
+    const explanationRequest = apiKey
+      ? requestClientExplanation(provider, apiKey, payload, controller.signal).then(
+          (explanation) => ({ explanation, source: provider }),
+        )
+      : fetch("/api/explain", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        }).then(async (response) => {
+          const data = (await response.json()) as {
+            explanation?: BilingualExplanation;
+            source?: "ai" | "local";
+            error?: string;
+          };
+          if (!response.ok) throw new Error(data.error ?? "Explanation failed");
+          if (!data.explanation?.en || !data.explanation.he) {
+            throw new Error("Incomplete bilingual explanation");
+          }
+          return { explanation: data.explanation, source: data.source ?? "local" };
+        });
+
+    explanationRequest
+      .then(({ explanation, source }) => {
         setResultState({
           move,
           opening: settledOpening,
-          explanation: data.explanation,
+          settings: aiSettings,
+          explanation,
           error: null,
-          source: data.source ?? "local",
+          source,
         });
       })
       .catch((err: unknown) => {
@@ -70,6 +86,7 @@ export function useExplanation(move: AnalyzedMove | null, opening: OpeningContex
         setResultState({
           move,
           opening: settledOpening,
+          settings: aiSettings,
           explanation: { en: "", he: "" },
           error: err instanceof Error ? err.message : "Explanation failed",
           source: null,
@@ -77,10 +94,14 @@ export function useExplanation(move: AnalyzedMove | null, opening: OpeningContex
       });
 
     return () => controller.abort();
-  }, [move, opening]);
+  }, [move, opening, aiSettings]);
 
   const result =
-    resultState?.move === move && resultState.opening === opening ? resultState : null;
+    resultState?.move === move &&
+    resultState.opening === opening &&
+    resultState.settings === aiSettings
+      ? resultState
+      : null;
   return {
     text: result?.explanation[language] ?? null,
     loading: move !== null && (opening?.status === "loading" || result === null),
