@@ -93,22 +93,22 @@ export function ChessAnalyzer() {
   return (
     <div className="min-h-full bg-zinc-100 text-zinc-900 dark:bg-[#0b0f14] dark:text-zinc-100">
       <header className="border-b border-zinc-200 bg-white/80 px-4 py-3 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/70">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
-          <div>
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
             <p className="text-[11px] uppercase tracking-[0.2em] text-emerald-600 dark:text-emerald-400">
               Chess Analyzer
             </p>
-            <h1 className="text-lg font-semibold">{gameTitle(gameState.game.headers)}</h1>
+            <h1 className="break-words text-lg font-semibold">{gameTitle(gameState.game.headers)}</h1>
           </div>
           <ThemeToggle theme={theme} onToggle={toggleTheme} />
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-7xl gap-6 p-4 lg:grid-cols-[minmax(0,1fr)_minmax(22rem,26rem)]">
-        <section className="flex flex-col gap-4">
-          <div className="relative flex items-start gap-3 rounded-2xl border border-zinc-200/80 bg-white/80 p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/70">
+      <main className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-3 py-4 sm:gap-6 sm:px-4 md:flex-row">
+        <section className="flex min-w-0 w-full flex-col gap-4 md:flex-1">
+          <div className="relative flex min-w-0 items-start gap-2 rounded-xl border border-zinc-200/80 bg-white/80 p-2 shadow-sm sm:gap-3 sm:rounded-2xl sm:p-3 dark:border-zinc-800 dark:bg-zinc-900/70">
             <EvalBar percent={evalBarPercent(whiteCp)} label={formatWhiteCp(whiteCp)} />
-            <div className="relative min-w-0 flex-1">
+            <div className="relative aspect-square min-w-0 flex-1">
               <Chessboard
                 options={{
                   position: gameState.fen,
@@ -144,6 +144,7 @@ export function ChessAnalyzer() {
                     borderRadius: "12px",
                     overflow: "hidden",
                     width: "100%",
+                    aspectRatio: "1 / 1",
                   },
                   darkSquareStyle: { backgroundColor: theme === "dark" ? "#3d5a4c" : "#769656" },
                   lightSquareStyle: { backgroundColor: theme === "dark" ? "#c5d5c0" : "#eeeed2" },
@@ -186,7 +187,7 @@ export function ChessAnalyzer() {
           />
         </section>
 
-        <aside className="flex flex-col gap-4">
+        <aside className="flex min-w-0 w-full flex-col gap-4 md:w-[22rem] md:flex-none lg:w-[26rem]">
           <GameImport
             onLoadPgn={(pgn) => {
               gameState.loadPgn(pgn);

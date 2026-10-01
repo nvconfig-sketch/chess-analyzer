@@ -8,11 +8,11 @@ type Props = {
 
 export function NavigationControls({ ply, total, onGo }: Props) {
   const btn =
-    "rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-800 enabled:hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:enabled:hover:bg-zinc-800";
+    "min-h-11 rounded-lg border border-zinc-300 bg-white px-2.5 py-2 text-xs font-medium text-zinc-800 enabled:hover:bg-zinc-100 disabled:opacity-40 sm:px-3 sm:py-1.5 sm:text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:enabled:hover:bg-zinc-800";
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-2">
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <button type="button" className={btn} disabled={ply <= 0} onClick={() => onGo(0)}>
           First
         </button>

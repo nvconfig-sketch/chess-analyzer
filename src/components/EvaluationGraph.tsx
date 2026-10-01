@@ -1,6 +1,6 @@
 "use client";
 
-import type { KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { CLASSIFICATION_META } from "@/lib/classify";
 import { formatWhiteCp, whiteCpFromFen } from "@/lib/eval";
 import type { AnalyzedMove, MoveClassification } from "@/lib/types";
@@ -44,13 +44,25 @@ const LEFT = 38;
 const RIGHT = 12;
 const TOP = 18;
 const BOTTOM = 36;
-const MIN_POINT_SPACING = 22;
-
 export function EvaluationGraph({ analyzed, currentPly, onSelect }: Props) {
+  const chartRef = useRef<HTMLDivElement>(null);
+  const [chartWidth, setChartWidth] = useState(360);
+
+  useEffect(() => {
+    const container = chartRef.current;
+    if (!container) return;
+
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setChartWidth(Math.max(1, Math.floor(entry.contentRect.width)));
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
+
   if (analyzed.length === 0) return null;
 
-  const plotWidth = Math.max(300, analyzed.length * MIN_POINT_SPACING);
-  const width = LEFT + plotWidth + RIGHT;
+  const width = chartWidth;
+  const plotWidth = Math.max(1, width - LEFT - RIGHT);
   const plotHeight = HEIGHT - TOP - BOTTOM;
   const step = plotWidth / analyzed.length;
   const points = analyzed.map((move, index) => {
@@ -82,14 +94,24 @@ export function EvaluationGraph({ analyzed, currentPly, onSelect }: Props) {
           White advantage / יתרון ללבן
         </span>
       </div>
-      <div className="mt-2 overflow-x-auto overscroll-x-contain">
+      <div ref={chartRef} className="mt-2 w-full min-w-0">
         <svg
-          className="block h-auto max-w-none"
+          className="block h-auto w-full touch-pan-y"
           width={width}
           height={HEIGHT}
           viewBox={`0 0 ${width} ${HEIGHT}`}
           role="group"
           aria-label="Evaluation by move / הערכת העמדה לפי מסע"
+          onClick={(event) => {
+            const bounds = event.currentTarget.getBoundingClientRect();
+            const pointerX = ((event.clientX - bounds.left) / bounds.width) * width;
+            if (pointerX < LEFT || pointerX > LEFT + plotWidth) return;
+
+            const nearestPoint = points.reduce((nearest, point) =>
+              Math.abs(point.x - pointerX) < Math.abs(nearest.x - pointerX) ? point : nearest,
+            );
+            onSelect(nearestPoint.move.ply);
+          }}
         >
           {tickValues.map((tick) => {
             const y = TOP + ((10 - tick) / 20) * plotHeight;
@@ -142,6 +164,8 @@ export function EvaluationGraph({ analyzed, currentPly, onSelect }: Props) {
                   : `${formatWhiteCp(whiteCp)} pawns / רגלים`;
             const tooltip = `${moveNotation} · ${meta.label} / ${HEBREW_CLASSIFICATIONS[move.classification]} · ${scoreText}`;
             const selected = currentPly === move.ply;
+            const markerRadius = Math.min(9, step * 0.42);
+            const hitRadius = Math.min(13, step * 0.48);
 
             return (
               <g
@@ -150,7 +174,10 @@ export function EvaluationGraph({ analyzed, currentPly, onSelect }: Props) {
                 tabIndex={0}
                 aria-label={`${tooltip}. Go to move / מעבר למסע`}
                 className="cursor-pointer"
-                onClick={() => onSelect(move.ply)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onSelect(move.ply);
+                }}
                 onKeyDown={(event: KeyboardEvent<SVGGElement>) =>
                   activateOnKeyboard(event, () => onSelect(move.ply))
                 }
@@ -159,7 +186,7 @@ export function EvaluationGraph({ analyzed, currentPly, onSelect }: Props) {
                 <circle
                   cx={x}
                   cy={y}
-                  r={selected ? 15 : 13}
+                  r={hitRadius}
                   fill="transparent"
                   stroke={selected ? "#10b981" : "transparent"}
                   strokeWidth="2"
@@ -167,21 +194,21 @@ export function EvaluationGraph({ analyzed, currentPly, onSelect }: Props) {
                 <circle
                   cx={x}
                   cy={y}
-                  r="9"
+                  r={markerRadius}
                   fill={badge.fill}
                   stroke="#ffffff"
                   strokeWidth="1.5"
                 />
                 <text
                   x={x}
-                  y={y + 3}
+                  y={y + markerRadius * 0.35}
                   textAnchor="middle"
-                  fontSize="9"
+                  fontSize={Math.min(9, markerRadius * 0.95)}
                   fontWeight="800"
                   fill={badge.text}
                   pointerEvents="none"
                 >
-                  {badge.symbol}
+                  {markerRadius >= 5 ? badge.symbol : ""}
                 </text>
               </g>
             );

@@ -26,7 +26,7 @@ export function PromotionDialog({ from, to, color, onChoose, onCancel }: Props) 
               key={piece.id}
               type="button"
               onClick={() => onChoose(piece.id)}
-              className="rounded-xl border border-zinc-200 px-3 py-2 text-sm hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+              className="min-h-11 rounded-xl border border-zinc-200 px-3 py-2 text-sm hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
             >
               {color === "w" ? piece.label : piece.label.toLowerCase()}
             </button>
@@ -35,7 +35,7 @@ export function PromotionDialog({ from, to, color, onChoose, onCancel }: Props) 
         <button
           type="button"
           onClick={onCancel}
-          className="mt-3 w-full text-sm text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+          className="mt-3 min-h-11 w-full text-sm text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
         >
           Cancel
         </button>

@@ -66,7 +66,7 @@ function MoveCell({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-md px-2 py-1 text-left ${
+      className={`min-h-11 rounded-md px-1.5 py-2 text-left text-sm sm:px-2 ${
         active
           ? "bg-emerald-600 text-white"
           : "hover:bg-zinc-100 dark:hover:bg-zinc-800"

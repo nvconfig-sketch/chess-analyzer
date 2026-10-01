@@ -33,8 +33,8 @@ export function AnalysisPanel({
 
   return (
     <section className="flex flex-col gap-4 rounded-2xl border border-zinc-200/80 bg-white/80 p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/70">
-      <div className="flex items-start justify-between gap-3">
-        <div>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
           <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">
             Engine analysis
           </h2>
@@ -46,7 +46,7 @@ export function AnalysisPanel({
           type="button"
           onClick={onAnalyze}
           disabled={!engineReady || analyzing}
-          className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+          className="min-h-11 shrink-0 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
         >
           {analyzing ? "Analyzing…" : "Analyze game"}
         </button>
@@ -159,7 +159,7 @@ export function AnalysisPanel({
                 type="button"
                 onClick={() => explanation.setLanguage(language)}
                 aria-pressed={explanation.language === language}
-                className={`min-w-9 rounded px-2 py-1 text-xs font-semibold ${
+                className={`min-h-11 min-w-11 rounded px-2 py-2 text-xs font-semibold ${
                   explanation.language === language
                     ? "bg-emerald-600 text-white"
                     : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
