@@ -132,6 +132,78 @@ export function AiSettings() {
             on a trusted device; clear the key here before sharing this browser profile.
           </p>
 
+          <details className="mt-4 rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+            <summary className="min-h-11 cursor-pointer py-2 text-sm font-semibold">
+              How to get an API key
+            </summary>
+            <div className="space-y-4 pt-2 text-sm">
+              <div>
+                <h3 className="font-semibold">Google Gemini</h3>
+                <ol className="mt-1 list-decimal space-y-1 pl-5 text-xs leading-5 text-zinc-600 dark:text-zinc-300">
+                  <li>
+                    Open{" "}
+                    <a
+                      href="https://aistudio.google.com/app/apikey"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-medium text-emerald-700 underline underline-offset-2 dark:text-emerald-300"
+                    >
+                      Google AI Studio API keys
+                    </a>
+                    .
+                  </li>
+                  <li>Sign in, choose or create a project, then create an API key.</li>
+                  <li>Copy the key, select Google Gemini above, paste it, and save.</li>
+                </ol>
+                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                  Gemini has a free tier with usage limits. Check current{" "}
+                  <a
+                    href="https://ai.google.dev/gemini-api/docs/pricing"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline underline-offset-2"
+                  >
+                    pricing and limits
+                  </a>
+                  .
+                </p>
+              </div>
+
+              <div>
+                <h3 className="font-semibold">OpenAI</h3>
+                <ol className="mt-1 list-decimal space-y-1 pl-5 text-xs leading-5 text-zinc-600 dark:text-zinc-300">
+                  <li>
+                    Open{" "}
+                    <a
+                      href="https://platform.openai.com/api-keys"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-medium text-emerald-700 underline underline-offset-2 dark:text-emerald-300"
+                    >
+                      OpenAI API keys
+                    </a>
+                    .
+                  </li>
+                  <li>Sign in, create a new secret key, and copy it when prompted.</li>
+                  <li>Select OpenAI above, paste the key, and save.</li>
+                </ol>
+                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                  OpenAI API usage is billed separately from ChatGPT and may require billing setup.
+                  Review current{" "}
+                  <a
+                    href="https://openai.com/api/pricing/"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline underline-offset-2"
+                  >
+                    API pricing
+                  </a>
+                  .
+                </p>
+              </div>
+            </div>
+          </details>
+
           {saveError ? <p className="mt-3 text-sm text-rose-500">{saveError}</p> : null}
           <div className="mt-5 flex flex-wrap justify-end gap-2">
             <button
