@@ -10,10 +10,43 @@ export async function requestClientExplanation(
   signal: AbortSignal,
 ): Promise<BilingualExplanation> {
   const prompt = buildMovePrompt(payload);
+  const parsed = await requestClientJson(
+    provider,
+    apiKey,
+    SYSTEM_PROMPT,
+    prompt,
+    signal,
+    300,
+  );
+
+  if (
+    typeof parsed !== "object" ||
+    parsed === null ||
+    !("en" in parsed) ||
+    !("he" in parsed) ||
+    typeof parsed.en !== "string" ||
+    typeof parsed.he !== "string" ||
+    !parsed.en.trim() ||
+    !parsed.he.trim()
+  ) {
+    throw new Error("The AI response did not include English and Hebrew explanations");
+  }
+
+  return { en: parsed.en.trim(), he: parsed.he.trim() };
+}
+
+export async function requestClientJson(
+  provider: AiProvider,
+  apiKey: string,
+  systemPrompt: string,
+  prompt: string,
+  signal: AbortSignal,
+  maxOutputTokens = 300,
+): Promise<unknown> {
   const response =
     provider === "gemini"
-      ? await requestGemini(apiKey, prompt, signal)
-      : await requestOpenAi(apiKey, prompt, signal);
+      ? await requestGemini(apiKey, systemPrompt, prompt, signal, maxOutputTokens)
+      : await requestOpenAi(apiKey, systemPrompt, prompt, signal, maxOutputTokens);
 
   if (!response.ok) {
     throw new Error(`${provider === "gemini" ? "Gemini" : "OpenAI"} request failed (${response.status})`);
@@ -26,21 +59,27 @@ export async function requestClientExplanation(
       : data.choices?.[0]?.message?.content;
   if (!content?.trim()) throw new Error("The AI provider returned an empty explanation");
 
-  return parseBilingualExplanation(content);
+  return parseJsonResponse(content);
 }
 
-async function requestGemini(apiKey: string, prompt: string, signal: AbortSignal) {
+async function requestGemini(
+  apiKey: string,
+  systemPrompt: string,
+  prompt: string,
+  signal: AbortSignal,
+  maxOutputTokens: number,
+) {
   return fetch(
     "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
     {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
       body: JSON.stringify({
-        system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        system_instruction: { parts: [{ text: systemPrompt }] },
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
           temperature: 0.5,
-          maxOutputTokens: 300,
+          maxOutputTokens,
           responseMimeType: "application/json",
         },
       }),
@@ -49,7 +88,13 @@ async function requestGemini(apiKey: string, prompt: string, signal: AbortSignal
   );
 }
 
-async function requestOpenAi(apiKey: string, prompt: string, signal: AbortSignal) {
+async function requestOpenAi(
+  apiKey: string,
+  systemPrompt: string,
+  prompt: string,
+  signal: AbortSignal,
+  maxOutputTokens: number,
+) {
   return fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -59,10 +104,10 @@ async function requestOpenAi(apiKey: string, prompt: string, signal: AbortSignal
     body: JSON.stringify({
       model: "gpt-4o-mini",
       temperature: 0.5,
-      max_tokens: 300,
+      max_tokens: maxOutputTokens,
       response_format: { type: "json_object" },
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
+        { role: "system", content: systemPrompt },
         { role: "user", content: prompt },
       ],
     }),
@@ -90,23 +135,12 @@ Evaluation loss versus best: ${payload.evalDelta}
 ${opening}`;
 }
 
-function parseBilingualExplanation(content: string): BilingualExplanation {
+function parseJsonResponse(content: string): unknown {
   const json = content
     .trim()
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/\s*```$/, "");
-  const parsed = JSON.parse(json) as Partial<BilingualExplanation>;
-
-  if (
-    typeof parsed.en !== "string" ||
-    typeof parsed.he !== "string" ||
-    !parsed.en.trim() ||
-    !parsed.he.trim()
-  ) {
-    throw new Error("The AI response did not include English and Hebrew explanations");
-  }
-
-  return { en: parsed.en.trim(), he: parsed.he.trim() };
+  return JSON.parse(json) as unknown;
 }
 
 type ProviderResponse = {

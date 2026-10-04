@@ -2,8 +2,9 @@
 
 import { CLASSIFICATION_META } from "@/lib/classify";
 import { formatWhiteCp, whiteCpFromFen } from "@/lib/eval";
-import type { AnalyzedMove, OpeningContext } from "@/lib/types";
+import type { AnalyzedMove, GameHeaders, OpeningContext } from "@/lib/types";
 import { useExplanation } from "@/hooks/useExplanation";
+import { GameReview } from "@/components/GameReview";
 
 type Props = {
   move: AnalyzedMove | null;
@@ -15,6 +16,9 @@ type Props = {
   liveBest: string | null;
   liveEval: string;
   opening: OpeningContext | null;
+  analyzed: AnalyzedMove[] | null;
+  gameHeaders: GameHeaders;
+  gameAnalysisComplete: boolean;
 };
 
 export function AnalysisPanel({
@@ -27,6 +31,9 @@ export function AnalysisPanel({
   liveBest,
   liveEval,
   opening,
+  analyzed,
+  gameHeaders,
+  gameAnalysisComplete,
 }: Props) {
   const explanation = useExplanation(move, opening);
   const meta = move ? CLASSIFICATION_META[move.classification] : null;
@@ -71,6 +78,10 @@ export function AnalysisPanel({
             {progress.done} / {progress.total} moves
           </p>
         </div>
+      ) : null}
+
+      {gameAnalysisComplete && analyzed ? (
+        <GameReview analyzed={analyzed} headers={gameHeaders} />
       ) : null}
 
       <div className="grid grid-cols-2 gap-3 text-sm">

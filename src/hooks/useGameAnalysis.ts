@@ -5,6 +5,7 @@ import type { AnalyzedMove, LoadedGame } from "@/lib/types";
 import { classifyMove } from "@/lib/classify";
 import { lanToSan } from "@/lib/game";
 import { StockfishEngine } from "@/lib/stockfish-engine";
+import type { EngineAnalysis } from "@/lib/stockfish-engine";
 
 export function useGameAnalysis() {
   const engineRef = useRef<StockfishEngine | null>(null);
@@ -100,6 +101,12 @@ export function useGameAnalysis() {
     }
   }, [analyzing]);
 
+  const analyzePosition = useCallback(async (fen: string, depth = 12): Promise<EngineAnalysis> => {
+    const engine = engineRef.current;
+    if (!engine) throw new Error("The chess engine is not ready yet");
+    return engine.analyze(fen, depth);
+  }, []);
+
   return {
     engineReady,
     engineError,
@@ -109,6 +116,7 @@ export function useGameAnalysis() {
     liveEval,
     analyzeGame,
     analyzeLive,
+    analyzePosition,
     resetAnalysis: () => {
       setAnalyzed(null);
       setLiveEval(null);

@@ -4,37 +4,23 @@ import dynamic from "next/dynamic";
 import { useEffect, useMemo } from "react";
 import { AiSettings } from "@/components/AiSettings";
 import { AnalysisPanel } from "@/components/AnalysisPanel";
+import { GameExport } from "@/components/GameExport";
 import { EvalBar } from "@/components/EvalBar";
 import { EvaluationGraph } from "@/components/EvaluationGraph";
 import { GameImport } from "@/components/GameImport";
+import { GuessTheMovePanel } from "@/components/GuessTheMovePanel";
 import { MoveList } from "@/components/MoveList";
 import { NavigationControls } from "@/components/NavigationControls";
 import { PromotionDialog } from "@/components/PromotionDialog";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useChessGame } from "@/hooks/useChessGame";
 import { useGameAnalysis } from "@/hooks/useGameAnalysis";
+import { useGuessTheMove } from "@/hooks/useGuessTheMove";
 import { useOpening } from "@/hooks/useOpening";
 import { useTheme } from "@/hooks/useTheme";
+import { CLASSIFICATION_BADGES } from "@/lib/classification-badges";
 import { evalBarPercent, formatWhiteCp, whiteCpFromFen } from "@/lib/eval";
 import { gameTitle } from "@/lib/game";
-import type { MoveClassification } from "@/lib/types";
-
-const CLASSIFICATION_BADGES: Record<
-  MoveClassification,
-  { symbol: string; label: string; labelHe: string; style: string }
-> = {
-  brilliant: { symbol: "✦", label: "BRILLIANT", labelHe: "מבריק", style: "bg-cyan-300 text-cyan-950" },
-  great: { symbol: "↗", label: "GREAT FIND", labelHe: "מהלך מצוין", style: "bg-emerald-300 text-emerald-950" },
-  best: { symbol: "★", label: "BEST", labelHe: "הטוב ביותר", style: "bg-green-500 text-white" },
-  excellent: { symbol: "✓", label: "EXCELLENT", labelHe: "מצוין", style: "bg-lime-300 text-lime-950" },
-  good: { symbol: "+", label: "GOOD", labelHe: "טוב", style: "bg-green-200 text-green-950" },
-  inaccuracy: { symbol: "!", label: "INACCURACY", labelHe: "אי-דיוק", style: "bg-yellow-300 text-yellow-950" },
-  mistake: { symbol: "?", label: "MISTAKE", labelHe: "טעות", style: "bg-orange-300 text-orange-950" },
-  poor: { symbol: "−", label: "POOR", labelHe: "חלש", style: "bg-orange-500 text-white" },
-  blunder: { symbol: "×", label: "BLUNDER", labelHe: "טעות חמורה", style: "bg-rose-600 text-white" },
-  book: { symbol: "B", label: "BOOK", labelHe: "תיאוריה", style: "bg-sky-300 text-sky-950" },
-  forced: { symbol: "=", label: "FORCED", labelHe: "כפוי", style: "bg-zinc-300 text-zinc-900" },
-};
 
 const Chessboard = dynamic(
   () => import("react-chessboard").then((mod) => mod.Chessboard),
@@ -45,6 +31,12 @@ export function ChessAnalyzer() {
   const { theme, toggleTheme } = useTheme();
   const gameState = useChessGame();
   const analysis = useGameAnalysis();
+  const training = useGuessTheMove({
+    game: gameState.game,
+    initialPly: gameState.ply,
+    analyzed: analysis.analyzed,
+    analyzePosition: analysis.analyzePosition,
+  });
 
   const currentAnalysis =
     gameState.ply > 0 ? (analysis.analyzed?.[gameState.ply - 1] ?? null) : null;
@@ -73,14 +65,22 @@ export function ChessAnalyzer() {
   }, [gameState.fen, analysis.analyzing, analysis.engineReady]);
 
   const lastMove = gameState.currentMove;
-  const squareStyles = lastMove
+  const boardFen = training.active ? training.positionFen ?? gameState.fen : gameState.fen;
+  const squareStyles = training.active && training.feedback
+    ? {
+        [training.feedback.guessedFrom]: { backgroundColor: "rgba(245, 158, 11, 0.4)" },
+        [training.feedback.guessedTo]: { backgroundColor: "rgba(245, 158, 11, 0.6)" },
+      }
+    : lastMove && !training.active
     ? {
         [lastMove.from]: { backgroundColor: "rgba(16, 185, 129, 0.35)" },
         [lastMove.to]: { backgroundColor: "rgba(16, 185, 129, 0.55)" },
       }
     : undefined;
 
-  const best = currentAnalysis?.bestMove ?? analysis.liveEval?.bestMove;
+  const best = training.active
+    ? training.feedback?.bestMoveUci ?? null
+    : currentAnalysis?.bestMove ?? analysis.liveEval?.bestMove;
   const arrows = best
     ? [
         {
@@ -103,6 +103,15 @@ export function ChessAnalyzer() {
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <AiSettings />
+            {!analysis.analyzing &&
+            gameState.game.moves.length > 0 &&
+            analysis.analyzed?.length === gameState.game.moves.length ? (
+              <GameExport
+                game={gameState.game}
+                analyzed={analysis.analyzed}
+                theme={theme}
+              />
+            ) : null}
             <ThemeToggle theme={theme} onToggle={toggleTheme} />
           </div>
         </div>
@@ -115,13 +124,13 @@ export function ChessAnalyzer() {
             <div className="relative aspect-square min-w-0 flex-1">
               <Chessboard
                 options={{
-                  position: gameState.fen,
+                  position: boardFen,
                   boardOrientation: "white",
-                  onPieceDrop: gameState.onPieceDrop,
+                  onPieceDrop: training.active ? training.onPieceDrop : gameState.onPieceDrop,
                   squareStyles,
                   squareRenderer: ({ children, square }) => {
                     const badge =
-                      currentAnalysis && square === currentAnalysis.to
+                      !training.active && currentAnalysis && square === currentAnalysis.to
                         ? CLASSIFICATION_BADGES[currentAnalysis.classification]
                         : null;
 
@@ -158,7 +167,7 @@ export function ChessAnalyzer() {
                 <PromotionDialog
                   from={gameState.pendingPromotion.from}
                   to={gameState.pendingPromotion.to}
-                  color={gameState.fen.split(" ")[1] === "b" ? "b" : "w"}
+                  color={boardFen.split(" ")[1] === "b" ? "b" : "w"}
                   onChoose={(piece) =>
                     gameState.applyMove(
                       gameState.pendingPromotion!.from,
@@ -169,35 +178,55 @@ export function ChessAnalyzer() {
                   onCancel={gameState.cancelPromotion}
                 />
               ) : null}
+              {training.pendingPromotion ? (
+                <PromotionDialog
+                  from={training.pendingPromotion.from}
+                  to={training.pendingPromotion.to}
+                  color={boardFen.split(" ")[1] === "b" ? "b" : "w"}
+                  onChoose={training.applyPromotion}
+                  onCancel={training.cancelPromotion}
+                />
+              ) : null}
             </div>
           </div>
-          <NavigationControls
-            ply={gameState.ply}
-            total={gameState.game.moves.length}
-            onGo={gameState.go}
+          <GuessTheMovePanel
+            training={training}
+            engineReady={analysis.engineReady}
+            totalMoves={gameState.game.moves.length}
           />
-          {analysis.analyzed && analysis.analyzed.length > 0 ? (
-            <EvaluationGraph
-              analyzed={analysis.analyzed}
-              currentPly={gameState.ply}
-              onSelect={gameState.go}
-            />
+          {!training.active ? (
+            <>
+              <NavigationControls
+                ply={gameState.ply}
+                total={gameState.game.moves.length}
+                onGo={gameState.go}
+              />
+              {analysis.analyzed && analysis.analyzed.length > 0 ? (
+                <EvaluationGraph
+                  analyzed={analysis.analyzed}
+                  currentPly={gameState.ply}
+                  onSelect={gameState.go}
+                />
+              ) : null}
+              <MoveList
+                moves={gameState.game.moves}
+                analyzed={analysis.analyzed}
+                ply={gameState.ply}
+                onSelect={gameState.go}
+              />
+            </>
           ) : null}
-          <MoveList
-            moves={gameState.game.moves}
-            analyzed={analysis.analyzed}
-            ply={gameState.ply}
-            onSelect={gameState.go}
-          />
         </section>
 
         <aside className="flex min-w-0 w-full flex-col gap-4 md:w-[22rem] md:flex-none lg:w-[26rem]">
           <GameImport
             onLoadPgn={(pgn) => {
+              training.stop();
               gameState.loadPgn(pgn);
               analysis.resetAnalysis();
             }}
             onLoadFen={(fen) => {
+              training.stop();
               gameState.loadFen(fen);
               analysis.resetAnalysis();
             }}
@@ -218,6 +247,13 @@ export function ChessAnalyzer() {
             }
             liveEval={formatWhiteCp(whiteCp)}
             opening={opening}
+            analyzed={analysis.analyzed}
+            gameHeaders={gameState.game.headers}
+            gameAnalysisComplete={
+              !analysis.analyzing &&
+              analysis.analyzed?.length === gameState.game.moves.length &&
+              gameState.game.moves.length > 0
+            }
           />
         </aside>
       </main>

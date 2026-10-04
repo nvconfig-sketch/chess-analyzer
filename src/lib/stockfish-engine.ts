@@ -11,8 +11,10 @@ export type EngineAnalysis = {
 type Job = {
   fen: string;
   depth: number;
+  timeoutMs: number;
   resolve: (value: EngineAnalysis) => void;
   reject: (error: Error) => void;
+  timeoutId?: ReturnType<typeof setTimeout>;
 };
 
 export class StockfishEngine {
@@ -55,12 +57,13 @@ export class StockfishEngine {
 
       worker.onerror = (event) => {
         const error = new Error(event.message || "Stockfish worker error");
-        this.active?.reject(error);
-        this.active = null;
+        this.failWorker(error);
         finish(error);
       };
 
       const timeout = window.setTimeout(() => {
+        worker.terminate();
+        if (this.worker === worker) this.worker = null;
         finish(new Error("Stockfish did not become ready in time"));
       }, 20000);
 
@@ -77,19 +80,16 @@ export class StockfishEngine {
     }
   }
 
-  async analyze(fen: string, depth = 12): Promise<EngineAnalysis> {
+  async analyze(fen: string, depth = 12, timeoutMs = 5000): Promise<EngineAnalysis> {
     await this.start();
     return new Promise<EngineAnalysis>((resolve, reject) => {
-      this.jobs.push({ fen, depth, resolve, reject });
+      this.jobs.push({ fen, depth, timeoutMs, resolve, reject });
       this.pump();
     });
   }
 
   dispose(): void {
-    this.jobs.forEach((job) => job.reject(new Error("Engine disposed")));
-    this.jobs = [];
-    this.active?.reject(new Error("Engine disposed"));
-    this.active = null;
+    this.rejectAllJobs(new Error("Engine disposed"));
     this.worker?.postMessage("quit");
     this.worker?.terminate();
     this.worker = null;
@@ -107,7 +107,9 @@ export class StockfishEngine {
         ...this.latest,
         bestMove: bestMove && bestMove !== "(none)" ? bestMove : this.latest.bestMove,
       };
-      this.active?.resolve(result);
+      const job = this.active;
+      if (job?.timeoutId) clearTimeout(job.timeoutId);
+      job?.resolve(result);
       this.active = null;
       this.pump();
     }
@@ -138,10 +140,30 @@ export class StockfishEngine {
     const job = this.jobs.shift();
     if (!job) return;
     this.active = job;
+    job.timeoutId = setTimeout(() => {
+      if (this.active !== job) return;
+      this.failWorker(new Error("Stockfish evaluation timed out after 5 seconds"));
+    }, job.timeoutMs);
     this.latest = emptyAnalysis();
     this.worker.postMessage("ucinewgame");
     this.worker.postMessage(`position fen ${job.fen}`);
     this.worker.postMessage(`go depth ${job.depth}`);
+  }
+
+  private failWorker(error: Error): void {
+    this.rejectAllJobs(error);
+    this.worker?.terminate();
+    this.worker = null;
+    this.boot = null;
+    this.latest = emptyAnalysis();
+  }
+
+  private rejectAllJobs(error: Error): void {
+    if (this.active?.timeoutId) clearTimeout(this.active.timeoutId);
+    this.active?.reject(error);
+    this.active = null;
+    this.jobs.forEach((job) => job.reject(error));
+    this.jobs = [];
   }
 }
 
