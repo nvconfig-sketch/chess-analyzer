@@ -46,7 +46,9 @@ export function GuessTheMovePanel({ training, engineReady, totalMoves }: Props) 
   }
 
   const meta = training.feedback
-    ? CLASSIFICATION_META[training.feedback.classification]
+    ? training.feedback.engineFallback
+      ? null
+      : CLASSIFICATION_META[training.feedback.classification]
     : null;
 
   return (
@@ -92,11 +94,25 @@ export function GuessTheMovePanel({ training, engineReady, totalMoves }: Props) 
               </span>
             ) : null}
           </div>
+          {training.feedback.engineFallback ? (
+            <p className="mt-2 text-sm font-medium text-emerald-700 dark:text-emerald-300" role="status">
+              Stockfish timed out or failed. Your legal move was accepted; moving to the next position shortly.
+              <span className="mt-1 block" lang="he" dir="rtl">
+                Stockfish התעכב או נכשל. המסע החוקי התקבל; עוברים בקרוב לעמדה הבאה.
+              </span>
+            </p>
+          ) : null}
           <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-200">
-            Best move: <strong>{training.feedback.bestMove}</strong>
-            {training.feedback.evalLossCp === null
-              ? ""
-              : ` · Eval loss ${Math.max(0, training.feedback.evalLossCp / 100).toFixed(2)} pawns`}
+            {training.feedback.engineFallback ? (
+              "Engine evaluation unavailable; this legal guess was accepted."
+            ) : (
+              <>
+                Best move: <strong>{training.feedback.bestMove}</strong>
+                {training.feedback.evalLossCp === null
+                  ? ""
+                  : ` · Eval loss ${Math.max(0, training.feedback.evalLossCp / 100).toFixed(2)} pawns`}
+              </>
+            )}
           </p>
           <div className="mt-3 flex items-center justify-between gap-3">
             <h3 className="text-xs font-semibold uppercase text-zinc-500">Coach note / הערת מאמן</h3>
@@ -120,6 +136,11 @@ export function GuessTheMovePanel({ training, engineReady, totalMoves }: Props) 
           <p className="mt-1 text-[11px] text-zinc-500">
             {training.feedback.source === "ai" ? "AI coach / מאמן AI" : "Engine coach / מאמן מנוע"}
           </p>
+          {training.feedback.correct ? (
+            <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-300" role="status">
+              Next position in a moment… / העמדה הבאה תוצג בעוד רגע…
+            </p>
+          ) : null}
           <button
             type="button"
             onClick={training.next}

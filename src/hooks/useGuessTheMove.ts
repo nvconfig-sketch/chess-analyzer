@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PieceDropHandlerArgs } from "react-chessboard";
 import { useAiSettings } from "@/hooks/useAiSettings";
 import { classifyMove } from "@/lib/classify";
@@ -19,6 +19,7 @@ export type GuessFeedback = {
   evalLossCp: number | null;
   guessedFrom: string;
   guessedTo: string;
+  engineFallback: boolean;
   explanation: BilingualExplanation;
   source: "ai" | "local";
   bestMoveUci: string | null;
@@ -34,18 +35,21 @@ type Props = {
 export function useGuessTheMove({ game, initialPly, analyzed, analyzePosition }: Props) {
   const aiSettings = useAiSettings();
   const requestController = useRef<AbortController | null>(null);
+  const advanceTimer = useRef<number | null>(null);
   const [active, setActive] = useState(false);
   const [ply, setPly] = useState(0);
   const [checking, setChecking] = useState(false);
   const [feedback, setFeedback] = useState<GuessFeedback | null>(null);
+  const [guessedFen, setGuessedFen] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pendingPromotion, setPendingPromotion] = useState<{ from: string; to: string } | null>(null);
   const [language, setLanguage] = useState<"en" | "he">("en");
 
   const positionFen = useMemo(() => {
     if (!active) return null;
+    if (guessedFen) return guessedFen;
     return ply === 0 ? game.startFen : game.moves[ply - 1]?.afterFen ?? game.startFen;
-  }, [active, game, ply]);
+  }, [active, game, guessedFen, ply]);
 
   const start = useCallback(() => {
     if (game.moves.length === 0) {
@@ -54,16 +58,20 @@ export function useGuessTheMove({ game, initialPly, analyzed, analyzePosition }:
     }
     setPly(Math.min(initialPly, game.moves.length - 1));
     setFeedback(null);
+    setGuessedFen(null);
     setError(null);
     setActive(true);
   }, [game.moves.length, initialPly]);
 
   const stop = useCallback(() => {
+    if (advanceTimer.current) window.clearTimeout(advanceTimer.current);
+    advanceTimer.current = null;
     requestController.current?.abort();
     requestController.current = null;
     setActive(false);
     setChecking(false);
     setFeedback(null);
+    setGuessedFen(null);
     setError(null);
     setPendingPromotion(null);
   }, []);
@@ -80,39 +88,65 @@ export function useGuessTheMove({ game, initialPly, analyzed, analyzePosition }:
     setChecking(true);
     setError(null);
     setPendingPromotion(null);
+    setGuessedFen(played.after);
     const controller = new AbortController();
     requestController.current?.abort();
     requestController.current = controller;
     try {
-      const preAnalysis = analyzed?.[ply]?.bestMove
+      let preAnalysis: EngineAnalysis | null = analyzed?.[ply]?.bestMove
         ? {
             bestMove: analyzed[ply].bestMove,
             score: analyzed[ply].evalBefore,
             pv: analyzed[ply].pv,
             depth: 0,
           }
-        : await analyzePosition(positionFen);
-      const postAnalysis = await analyzePosition(played.after);
+        : null;
+      let postAnalysis: EngineAnalysis | null = null;
+      let engineFallback = false;
+      if (!preAnalysis) {
+        try {
+          preAnalysis = await analyzePosition(positionFen);
+          if (!preAnalysis.bestMove) throw new Error("Stockfish did not return a best move");
+          postAnalysis = await analyzePosition(played.after);
+        } catch {
+          if (controller.signal.aborted) return;
+          engineFallback = true;
+          preAnalysis = null;
+          postAnalysis = null;
+        }
+      } else {
+        try {
+          postAnalysis = await analyzePosition(played.after);
+        } catch {
+          if (controller.signal.aborted) return;
+          engineFallback = true;
+          preAnalysis = null;
+          postAnalysis = null;
+        }
+      }
       if (controller.signal.aborted) return;
+
       const move = toGameMove(played, ply);
-      const correct = normalizeUci(move.lan) === normalizeUci(preAnalysis.bestMove ?? "");
-      const { classification, evalLossCp } = classifyMove({
-        move,
-        evalBefore: preAnalysis.score,
-        evalAfter: postAnalysis.score,
-        bestMove: preAnalysis.bestMove,
-        plyIndex: ply,
-      });
-      const bestMoveSan = lanToSan(positionFen, preAnalysis.bestMove);
+      const correct = engineFallback || normalizeUci(move.lan) === normalizeUci(preAnalysis?.bestMove ?? "");
+      const { classification, evalLossCp } = engineFallback
+        ? { classification: "good" as const, evalLossCp: null }
+        : classifyMove({
+            move,
+            evalBefore: preAnalysis?.score ?? null,
+            evalAfter: postAnalysis?.score ?? null,
+            bestMove: preAnalysis?.bestMove ?? null,
+            plyIndex: ply,
+          });
+      const bestMoveSan = engineFallback ? null : lanToSan(positionFen, preAnalysis?.bestMove ?? null);
       const payload = {
         fen: positionFen,
         moveSan: move.san,
         moveLan: move.lan,
-        bestMove: preAnalysis.bestMove,
+        bestMove: preAnalysis?.bestMove ?? null,
         bestMoveSan,
         classification,
-        evalBefore: formatWhiteCp(whiteCpFromFen(positionFen, preAnalysis.score)),
-        evalAfter: formatWhiteCp(whiteCpFromFen(played.after, postAnalysis.score)),
+        evalBefore: formatWhiteCp(whiteCpFromFen(positionFen, preAnalysis?.score ?? null)),
+        evalAfter: formatWhiteCp(whiteCpFromFen(played.after, postAnalysis?.score ?? null)),
         evalDelta: evalLossCp === null ? "unknown" : `${(evalLossCp / 100).toFixed(2)} pawns`,
         side: move.color === "w" ? "White" as const : "Black" as const,
         opening: null,
@@ -121,7 +155,12 @@ export function useGuessTheMove({ game, initialPly, analyzed, analyzePosition }:
       let source: "ai" | "local" = "local";
       const apiKey = aiSettings.apiKeys[aiSettings.provider].trim();
 
-      if (apiKey) {
+      if (engineFallback) {
+        explanation = {
+          en: "Stockfish was unavailable, so your legal move was accepted. Training will continue to the next position.",
+          he: "Stockfish אינו זמין כרגע, ולכן המסע החוקי שלך התקבל. האימון ימשיך לעמדה הבאה.",
+        };
+      } else if (apiKey) {
         try {
           explanation = await requestClientExplanation(
             aiSettings.provider,
@@ -138,20 +177,23 @@ export function useGuessTheMove({ game, initialPly, analyzed, analyzePosition }:
         explanation = localExplanation(payload);
       }
 
+      setGuessedFen(null);
       setFeedback({
         correct,
         guessedMove: move.san,
-        bestMove: bestMoveSan ?? preAnalysis.bestMove ?? "unknown",
+        bestMove: bestMoveSan ?? preAnalysis?.bestMove ?? "Engine unavailable",
         classification,
         evalLossCp,
         guessedFrom: move.from,
         guessedTo: move.to,
+        engineFallback,
         explanation,
         source,
-        bestMoveUci: preAnalysis.bestMove,
+        bestMoveUci: preAnalysis?.bestMove ?? null,
       });
     } catch (cause) {
       if (!controller.signal.aborted) {
+        setGuessedFen(null);
         setError(
           cause instanceof Error && cause.message.toLowerCase().includes("timed out")
             ? "Stockfish took too long to evaluate this position. Your guess was not submitted; please try again."
@@ -174,21 +216,36 @@ export function useGuessTheMove({ game, initialPly, analyzed, analyzePosition }:
       setPendingPromotion({ from: sourceSquare, to: targetSquare });
       return false;
     }
+    if (!tryMove(positionFen, sourceSquare, targetSquare)) {
+      setError("That move is not legal in this position.");
+      return false;
+    }
     void submitGuess(sourceSquare, targetSquare);
-    return false;
+    return true;
   }, [checking, feedback, positionFen, submitGuess]);
 
   const next = useCallback(() => {
+    if (advanceTimer.current) window.clearTimeout(advanceTimer.current);
+    advanceTimer.current = null;
     setFeedback(null);
     setError(null);
-    setPly((current) => {
-      if (current + 1 >= game.moves.length) {
-        setActive(false);
-        return current;
-      }
-      return current + 1;
-    });
-  }, [game.moves.length]);
+    if (ply + 1 >= game.moves.length) {
+      setActive(false);
+      setGuessedFen(null);
+      return;
+    }
+    setPly(ply + 1);
+  }, [game.moves.length, ply]);
+
+  useEffect(() => {
+    if (!active || !feedback?.correct) return;
+
+    advanceTimer.current = window.setTimeout(next, 2200);
+    return () => {
+      if (advanceTimer.current) window.clearTimeout(advanceTimer.current);
+      advanceTimer.current = null;
+    };
+  }, [active, feedback, next]);
 
   const targetMove = active ? game.moves[ply] ?? null : null;
   const currentAnalysis = active ? analyzed?.[ply] ?? null : null;
