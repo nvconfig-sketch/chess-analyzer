@@ -44,7 +44,7 @@ export function ChessAnalyzer() {
     () => gameState.game.moves.slice(0, gameState.ply),
     [gameState.game.moves, gameState.ply],
   );
-  const opening = useOpening(openingMoves, gameState.game.startFen);
+  const opening = useOpening(openingMoves, gameState.game.startFen, gameState.game.headers);
 
   const whiteCp = useMemo(() => {
     if (currentAnalysis?.evalAfter) {

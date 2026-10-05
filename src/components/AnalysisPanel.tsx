@@ -107,13 +107,20 @@ export function AnalysisPanel({
             <p className="mt-1 text-sm text-zinc-500">Checking theory / בודקים תיאוריה…</p>
           ) : opening.status === "unavailable" ? (
             <p className="mt-1 text-sm text-zinc-500">
-              Opening book unavailable / מאגר הפתיחות אינו זמין
+              Opening not identified / הפתיחה לא זוהתה
             </p>
           ) : opening.nameEn ? (
             <>
-              <p className="mt-1 text-sm font-medium text-zinc-800 dark:text-zinc-100" lang="en" dir="ltr">
-                {opening.nameEn}
-              </p>
+              <div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100" lang="en" dir="ltr">
+                  {opening.nameEn}
+                </p>
+                {opening.eco ? (
+                  <span className="font-mono text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                    ECO {opening.eco}
+                  </span>
+                ) : null}
+              </div>
               <p className="text-sm text-zinc-600 dark:text-zinc-300" lang="he" dir="rtl">
                 {opening.nameHe}
               </p>
