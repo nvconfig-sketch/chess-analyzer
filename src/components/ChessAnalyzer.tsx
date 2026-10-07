@@ -109,7 +109,14 @@ export function ChessAnalyzer() {
     ? Object.fromEntries(
         Object.entries(squareControls)
           .filter(([, control]) => control.style.backgroundColor)
-          .map(([square, control]) => [square, control.style]),
+          .map(([square, control]) => [
+            square,
+            {
+              ...control.style,
+              boxShadow: "inset 0 0 0 2px rgba(0, 0, 0, 0.15)",
+              borderRadius: "4px",
+            },
+          ]),
       )
     : {};
   const boardSquareStyles = { ...heatmapStyles, ...lastMoveSquares };

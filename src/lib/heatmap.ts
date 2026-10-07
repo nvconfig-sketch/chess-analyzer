@@ -1,9 +1,9 @@
 import { Chess, SQUARES, type Square, type Color } from "chess.js";
 import type { CSSProperties } from "react";
 
-const PLAYER_CONTROL = "rgba(34, 197, 94, 0.35)";
-const OPPONENT_CONTROL = "rgba(239, 68, 68, 0.35)";
-const CONTESTED_CONTROL = "rgba(250, 204, 21, 0.3)";
+const PLAYER_CONTROL = "rgba(34, 197, 94, 0.22)";
+const OPPONENT_CONTROL = "rgba(239, 68, 68, 0.22)";
+const CONTESTED_CONTROL = "rgba(234, 179, 8, 0.22)";
 
 export type SquareControl = {
   white: number;
@@ -58,9 +58,14 @@ export function squareControlCss(
     const lastMove = lastMoveSquares.includes(square);
     if (!backgroundColor && !lastMove) return [];
 
+    const shadows = [
+      backgroundColor ? "inset 0 0 0 2px rgba(0, 0, 0, 0.15)" : "",
+      lastMove ? "inset 0 0 0 4px rgba(250, 204, 21, 0.95)" : "",
+    ].filter(Boolean);
     const declarations = [
       backgroundColor ? `background-color: ${backgroundColor} !important;` : "",
-      lastMove ? "box-shadow: inset 0 0 0 4px rgba(250, 204, 21, 0.95) !important;" : "",
+      shadows.length ? `box-shadow: ${shadows.join(", ")} !important;` : "",
+      backgroundColor ? "border-radius: 4px;" : "",
     ].join("\n");
 
     return [`.analysis-board [data-square="${square}"] { ${declarations} }`];
