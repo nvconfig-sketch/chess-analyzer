@@ -1,7 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import type { Color } from "chess.js";
 import { AiSettings } from "@/components/AiSettings";
 import { AnalysisPanel } from "@/components/AnalysisPanel";
 import { GameExport } from "@/components/GameExport";
@@ -21,6 +22,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { CLASSIFICATION_BADGES } from "@/lib/classification-badges";
 import { evalBarPercent, formatWhiteCp, whiteCpFromFen } from "@/lib/eval";
 import { gameTitle } from "@/lib/game";
+import { calculateSquareControl, squareControlCss } from "@/lib/heatmap";
 
 const Chessboard = dynamic(
   () => import("react-chessboard").then((mod) => mod.Chessboard),
@@ -29,6 +31,7 @@ const Chessboard = dynamic(
 
 export function ChessAnalyzer() {
   const { theme, toggleTheme } = useTheme();
+  const [showHeatmap, setShowHeatmap] = useState(false);
   const gameState = useChessGame();
   const analysis = useGameAnalysis();
   const training = useGuessTheMove({
@@ -84,12 +87,40 @@ export function ChessAnalyzer() {
             : null
       );
   const displayedLastMove = training.active ? trainingLastMove : lastMove;
+  const playerColor: Color = boardFen.split(" ")[1] === "b" ? "b" : "w";
+  const squareControls = useMemo(
+    () => showHeatmap ? calculateSquareControl(boardFen, playerColor) : null,
+    [boardFen, playerColor, showHeatmap],
+  );
+  const lastMoveSquareNames = displayedLastMove
+    ? [displayedLastMove.from, displayedLastMove.to]
+    : [];
   const lastMoveSquares = displayedLastMove
     ? {
-        [displayedLastMove.from]: { backgroundColor: "#facc15", opacity: 0.75, zIndex: 10 },
-        [displayedLastMove.to]: { backgroundColor: "#facc15", opacity: 0.75, zIndex: 10 },
+        [displayedLastMove.from]: showHeatmap
+          ? { boxShadow: "inset 0 0 0 4px rgba(250, 204, 21, 0.95)" }
+          : { backgroundColor: "#facc15", opacity: 0.75, zIndex: 10 },
+        [displayedLastMove.to]: showHeatmap
+          ? { boxShadow: "inset 0 0 0 4px rgba(250, 204, 21, 0.95)" }
+          : { backgroundColor: "#facc15", opacity: 0.75, zIndex: 10 },
       }
     : undefined;
+  const heatmapStyles = squareControls
+    ? Object.fromEntries(
+        Object.entries(squareControls)
+          .filter(([, control]) => control.style.backgroundColor)
+          .map(([square, control]) => [square, control.style]),
+      )
+    : {};
+  const boardSquareStyles = { ...heatmapStyles, ...lastMoveSquares };
+  const boardOverlayCss = squareControls
+    ? squareControlCss(squareControls, lastMoveSquareNames)
+    : lastMoveSquareNames
+        .map(
+          (square) =>
+            `.analysis-board [data-square="${square}"] { background-color: rgba(250, 204, 21, 0.75) !important; }`,
+        )
+        .join("\n");
 
   const best = training.active
     ? training.feedback?.bestMoveUci ?? null
@@ -134,59 +165,74 @@ export function ChessAnalyzer() {
         <section className="flex min-w-0 w-full flex-col gap-4 md:flex-1">
           <div className="relative flex min-w-0 items-start gap-2 rounded-xl border border-zinc-200/80 bg-white/80 p-2 shadow-sm sm:gap-3 sm:rounded-2xl sm:p-3 dark:border-zinc-800 dark:bg-zinc-900/70">
             <EvalBar percent={evalBarPercent(whiteCp)} label={formatWhiteCp(whiteCp)} />
-            <div className="relative aspect-square min-w-0 flex-1">
-              {displayedLastMove ? (
-                <style>{`
-                  [data-square="${displayedLastMove.from}"],
-                  [data-square="${displayedLastMove.to}"] {
-                    background-color: rgba(250, 204, 21, 0.75) !important;
-                  }
-                `}</style>
-              ) : null}
-              <Chessboard
-                options={{
-                  position: boardFen,
-                  boardOrientation: "white",
-                  onPieceDrop: training.active ? training.onPieceDrop : gameState.onPieceDrop,
-                  canDragPiece: training.active
-                    ? ({ square }) => training.canDragPiece(square)
-                    : undefined,
-                  squareStyles: lastMoveSquares,
-                  squareRenderer: ({ children, square }) => {
-                    const badge =
-                      !training.active && currentAnalysis && square === currentAnalysis.to
-                        ? CLASSIFICATION_BADGES[currentAnalysis.classification]
-                        : null;
+            <div className="min-w-0 flex-1">
+              <div className="mb-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowHeatmap((visible) => !visible)}
+                  aria-pressed={showHeatmap}
+                  className={`inline-flex min-h-10 items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${
+                    showHeatmap
+                      ? "border-emerald-600 bg-emerald-600 text-white"
+                      : "border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                  }`}
+                >
+                  <span
+                    className={`relative h-4 w-7 rounded-full transition-colors ${showHeatmap ? "bg-emerald-300" : "bg-zinc-300 dark:bg-zinc-600"}`}
+                    aria-hidden="true"
+                  >
+                    <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform ${showHeatmap ? "translate-x-3.5" : "translate-x-0.5"}`} />
+                  </span>
+                  Threat Heatmap / מפת איומים
+                </button>
+              </div>
+              <div className="analysis-board relative aspect-square w-full">
+                {boardOverlayCss ? <style>{boardOverlayCss}</style> : null}
+                <Chessboard
+                  options={{
+                    position: boardFen,
+                    boardOrientation: "white",
+                    onPieceDrop: training.active ? training.onPieceDrop : gameState.onPieceDrop,
+                    canDragPiece: training.active
+                      ? ({ square }) => training.canDragPiece(square)
+                      : undefined,
+                    squareStyles: boardSquareStyles,
+                    squareRenderer: ({ children, square }) => {
+                      const badge =
+                        !training.active && currentAnalysis && square === currentAnalysis.to
+                          ? CLASSIFICATION_BADGES[currentAnalysis.classification]
+                          : null;
 
-                    if (!badge) return <>{children}</>;
+                      if (!badge) return <>{children}</>;
 
-                    return (
-                      <div className="relative h-full w-full">
-                        {children}
-                        <span
-                          className={`pointer-events-none absolute right-0.5 top-0.5 z-10 flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-extrabold leading-none shadow ring-1 ring-white/90 dark:ring-zinc-950/90 ${badge.style}`}
-                          role="img"
-                          aria-label={`${badge.label} / ${badge.labelHe}`}
-                          title={`${badge.label} / ${badge.labelHe}`}
-                        >
-                          {badge.symbol}
-                        </span>
-                      </div>
-                    );
-                  },
-                  arrows,
-                  allowDrawingArrows: true,
-                  animationDurationInMs: training.replaying ? 450 : 180,
-                  boardStyle: {
-                    borderRadius: "12px",
-                    overflow: "hidden",
-                    width: "100%",
-                    aspectRatio: "1 / 1",
-                  },
-                  darkSquareStyle: { backgroundColor: theme === "dark" ? "#3d5a4c" : "#769656" },
-                  lightSquareStyle: { backgroundColor: theme === "dark" ? "#c5d5c0" : "#eeeed2" },
-                }}
-              />
+                      return (
+                        <div className="relative h-full w-full">
+                          {children}
+                          <span
+                            className={`pointer-events-none absolute right-0.5 top-0.5 z-10 flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-extrabold leading-none shadow ring-1 ring-white/90 dark:ring-zinc-950/90 ${badge.style}`}
+                            role="img"
+                            aria-label={`${badge.label} / ${badge.labelHe}`}
+                            title={`${badge.label} / ${badge.labelHe}`}
+                          >
+                            {badge.symbol}
+                          </span>
+                        </div>
+                      );
+                    },
+                    arrows,
+                    allowDrawingArrows: true,
+                    animationDurationInMs: training.replaying ? 450 : 180,
+                    boardStyle: {
+                      borderRadius: "12px",
+                      overflow: "hidden",
+                      width: "100%",
+                      aspectRatio: "1 / 1",
+                    },
+                    darkSquareStyle: { backgroundColor: theme === "dark" ? "#3d5a4c" : "#769656" },
+                    lightSquareStyle: { backgroundColor: theme === "dark" ? "#c5d5c0" : "#eeeed2" },
+                  }}
+                />
+              </div>
               {gameState.pendingPromotion ? (
                 <PromotionDialog
                   from={gameState.pendingPromotion.from}
