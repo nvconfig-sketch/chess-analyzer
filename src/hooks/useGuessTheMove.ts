@@ -43,13 +43,17 @@ export function useGuessTheMove({ game, initialPly, analyzed, analyzePosition }:
   const aiSettings = useAiSettings();
   const requestController = useRef<AbortController | null>(null);
   const advanceTimer = useRef<number | null>(null);
+  const correctionTimer = useRef<number | null>(null);
   const replayTimer = useRef<number | null>(null);
+  const audioContext = useRef<AudioContext | null>(null);
   const [active, setActive] = useState(false);
   const [mistakeMode, setMistakeMode] = useState(false);
   const [mistakeSequence, setMistakeSequence] = useState<number[]>([]);
   const [mistakeProgress, setMistakeProgress] = useState(0);
   const [replayFen, setReplayFen] = useState<string | null>(null);
   const [replaying, setReplaying] = useState(false);
+  const [correctionFen, setCorrectionFen] = useState<string | null>(null);
+  const [correctionExecuted, setCorrectionExecuted] = useState(false);
   const [mistakeResults, setMistakeResults] = useState<boolean[]>([]);
   const [mistakeSummary, setMistakeSummary] = useState<MistakeDrillSummary | null>(null);
   const [ply, setPly] = useState(0);
@@ -103,6 +107,30 @@ export function useGuessTheMove({ game, initialPly, analyzed, analyzePosition }:
 
   useEffect(() => () => {
     if (replayTimer.current !== null) window.clearTimeout(replayTimer.current);
+    if (correctionTimer.current !== null) window.clearTimeout(correctionTimer.current);
+    if (audioContext.current && audioContext.current.state !== "closed") {
+      void audioContext.current.close();
+    }
+  }, []);
+
+  const playMoveSound = useCallback(() => {
+    if (typeof window === "undefined" || !window.AudioContext) return;
+
+    const context = audioContext.current ?? new window.AudioContext();
+    audioContext.current = context;
+    if (context.state === "suspended") void context.resume();
+
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    const now = context.currentTime;
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(440, now);
+    gain.gain.setValueAtTime(0.12, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start(now);
+    oscillator.stop(now + 0.09);
   }, []);
 
   const summarizeMistakeDrill = useCallback((results: boolean[]): MistakeDrillSummary => {
@@ -133,6 +161,8 @@ export function useGuessTheMove({ game, initialPly, analyzed, analyzePosition }:
       setError("Load a game with moves before starting training.");
       return;
     }
+    if (correctionTimer.current !== null) window.clearTimeout(correctionTimer.current);
+    correctionTimer.current = null;
     setMistakeMode(false);
     setMistakeSequence([]);
     setMistakeProgress(0);
@@ -140,6 +170,8 @@ export function useGuessTheMove({ game, initialPly, analyzed, analyzePosition }:
     setMistakeSummary(null);
     setReplayFen(null);
     setReplaying(false);
+    setCorrectionFen(null);
+    setCorrectionExecuted(false);
     setPly(Math.min(initialPly, game.moves.length - 1));
     setFeedback(null);
     setGuessedFen(null);
@@ -157,11 +189,15 @@ export function useGuessTheMove({ game, initialPly, analyzed, analyzePosition }:
       return;
     }
 
+    if (correctionTimer.current !== null) window.clearTimeout(correctionTimer.current);
+    correctionTimer.current = null;
     setMistakeMode(true);
     setMistakeSequence(sanitized);
     setMistakeProgress(0);
     setMistakeResults([]);
     setMistakeSummary(null);
+    setCorrectionFen(null);
+    setCorrectionExecuted(false);
     setPly(sanitized[0]);
     setFeedback(null);
     setGuessedFen(null);
@@ -183,6 +219,8 @@ export function useGuessTheMove({ game, initialPly, analyzed, analyzePosition }:
     setMistakeProgress(0);
     setReplayFen(null);
     setReplaying(false);
+    setCorrectionFen(null);
+    setCorrectionExecuted(false);
     setMistakeResults([]);
     setMistakeSummary(null);
     setChecking(false);
@@ -330,7 +368,25 @@ export function useGuessTheMove({ game, initialPly, analyzed, analyzePosition }:
   }, [active, aiSettings, analyzed, analyzePosition, checking, feedback, mistakeMode, ply, positionFen]);
 
   const onPieceDrop = useCallback(({ sourceSquare, targetSquare }: PieceDropHandlerArgs) => {
-    if (!targetSquare || !positionFen || feedback || checking || replaying) return false;
+    if (!targetSquare || !positionFen || checking || replaying || correctionExecuted) return false;
+
+    if (feedback) {
+      if (feedback.correct || !feedback.bestMoveUci) return false;
+      const expected = normalizeUci(feedback.bestMoveUci);
+      if (!expected.startsWith(`${sourceSquare}${targetSquare}`)) return false;
+      if (needsPromotion(positionFen, sourceSquare, targetSquare)) {
+        setPendingPromotion({ from: sourceSquare, to: targetSquare });
+        return false;
+      }
+      const played = tryMove(positionFen, sourceSquare, targetSquare);
+      if (!played || normalizeUci(played.lan) !== expected) return false;
+      setCorrectionFen(played.after);
+      setCorrectionExecuted(true);
+      setError(null);
+      playMoveSound();
+      return true;
+    }
+
     if (needsPromotion(positionFen, sourceSquare, targetSquare)) {
       setPendingPromotion({ from: sourceSquare, to: targetSquare });
       return false;
@@ -341,13 +397,35 @@ export function useGuessTheMove({ game, initialPly, analyzed, analyzePosition }:
     }
     void submitGuess(sourceSquare, targetSquare);
     return true;
-  }, [checking, feedback, positionFen, replaying, submitGuess]);
+  }, [checking, correctionExecuted, feedback, playMoveSound, positionFen, replaying, submitGuess]);
+
+  const canDragPiece = useCallback((square: string | null) => {
+    if (
+      !square ||
+      !active ||
+      checking ||
+      replaying ||
+      pendingPromotion ||
+      correctionExecuted ||
+      feedback?.correct
+    ) {
+      return false;
+    }
+    if (feedback) {
+      return Boolean(feedback.bestMoveUci && normalizeUci(feedback.bestMoveUci).startsWith(square));
+    }
+    return true;
+  }, [active, checking, correctionExecuted, feedback, pendingPromotion, replaying]);
 
   const next = useCallback(() => {
     if (advanceTimer.current) window.clearTimeout(advanceTimer.current);
     advanceTimer.current = null;
+    if (correctionTimer.current !== null) window.clearTimeout(correctionTimer.current);
+    correctionTimer.current = null;
     setFeedback(null);
     setError(null);
+    setCorrectionFen(null);
+    setCorrectionExecuted(false);
 
     if (mistakeMode && mistakeSequence.length > 0) {
       const nextProgress = mistakeProgress + 1;
@@ -380,6 +458,16 @@ export function useGuessTheMove({ game, initialPly, analyzed, analyzePosition }:
   }, [game.moves.length, mistakeMode, mistakeProgress, mistakeResults, mistakeSequence, ply, startMistakeReplay, summarizeMistakeDrill]);
 
   useEffect(() => {
+    if (!correctionExecuted) return;
+
+    correctionTimer.current = window.setTimeout(next, 800);
+    return () => {
+      if (correctionTimer.current !== null) window.clearTimeout(correctionTimer.current);
+      correctionTimer.current = null;
+    };
+  }, [correctionExecuted, next]);
+
+  useEffect(() => {
     if (!active || !feedback?.correct) return;
 
     advanceTimer.current = window.setTimeout(next, 2200);
@@ -400,6 +488,8 @@ export function useGuessTheMove({ game, initialPly, analyzed, analyzePosition }:
     ply,
     targetMove,
     positionFen,
+    correctionFen,
+    correctionExecuted,
     replayFen,
     replaying,
     replayMistake: () => startMistakeReplay(ply),
@@ -417,8 +507,23 @@ export function useGuessTheMove({ game, initialPly, analyzed, analyzePosition }:
     stop,
     next,
     onPieceDrop,
+    canDragPiece,
     applyPromotion: (piece: "q" | "r" | "b" | "n") => {
-      if (!pendingPromotion) return;
+      if (!pendingPromotion || !positionFen) return;
+      if (feedback && !feedback.correct && feedback.bestMoveUci) {
+        const expected = normalizeUci(feedback.bestMoveUci);
+        const played = tryMove(positionFen, pendingPromotion.from, pendingPromotion.to, piece);
+        if (!played || normalizeUci(played.lan) !== expected) {
+          setPendingPromotion(null);
+          return;
+        }
+        setCorrectionFen(played.after);
+        setCorrectionExecuted(true);
+        setError(null);
+        setPendingPromotion(null);
+        playMoveSound();
+        return;
+      }
       void submitGuess(pendingPromotion.from, pendingPromotion.to, piece);
     },
     cancelPromotion: () => setPendingPromotion(null),

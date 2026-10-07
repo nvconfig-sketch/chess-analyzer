@@ -208,6 +208,14 @@ export function GuessTheMovePanel({ training, engineReady, totalMoves }: Props) 
             <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-300" role="status">
               Next position in a moment… / העמדה הבאה תוצג בעוד רגע…
             </p>
+          ) : training.correctionExecuted ? (
+            <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-300" role="status">
+              Correct move played. Advancing shortly… / המסע הנכון בוצע. עוברים בקרוב…
+            </p>
+          ) : training.feedback.bestMoveUci ? (
+            <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-300">
+              Now play the indicated best move on the board, or continue with Next Position.
+            </p>
           ) : null}
           <button
             type="button"

@@ -66,7 +66,7 @@ export function ChessAnalyzer() {
 
   const lastMove = gameState.currentMove;
   const boardFen = training.active
-    ? training.replayFen ?? training.positionFen ?? gameState.fen
+    ? training.replayFen ?? training.correctionFen ?? training.positionFen ?? gameState.fen
     : gameState.fen;
   const squareStyles = training.active && training.feedback
     ? {
@@ -129,6 +129,9 @@ export function ChessAnalyzer() {
                   position: boardFen,
                   boardOrientation: "white",
                   onPieceDrop: training.active ? training.onPieceDrop : gameState.onPieceDrop,
+                  canDragPiece: training.active
+                    ? ({ square }) => training.canDragPiece(square)
+                    : undefined,
                   squareStyles,
                   squareRenderer: ({ children, square }) => {
                     const badge =
