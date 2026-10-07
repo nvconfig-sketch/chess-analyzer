@@ -20,6 +20,7 @@ Open [http://localhost:3000](http://localhost:3000).
 - Play extra moves on the board (including promotion)
 - Eval bar plus Stockfish best-move arrow
 - Game review tags: book, best, inaccuracy, mistake, blunder, great, brilliant
+- AI player personality profile for White, based on analyzed move patterns and evaluation metrics
 - `/api/explain` coaching text (Gemini when configured, otherwise a local note)
 
 ## Gemini (optional)
@@ -30,7 +31,7 @@ Create `.env.local` in the project root:
 GEMINI_API_KEY=your_key_here
 ```
 
-Restart `npm run dev`. The API route `src/app/api/explain/route.ts` sends the current FEN, played move, engine best move, and eval delta to Gemini 2.0 Flash.
+Restart `npm run dev`. The API routes use Gemini 2.0 Flash for move explanations and player personality profiles. Move explanations have a local fallback; generating a personality profile requires `GEMINI_API_KEY`. The profile is generated for White from the analyzed PGN metrics; the grandmaster comparison is intended as a tentative style resemblance, not a skill rating.
 
 ## Stockfish
 

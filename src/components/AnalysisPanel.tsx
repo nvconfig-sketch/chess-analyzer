@@ -5,6 +5,7 @@ import { formatWhiteCp, whiteCpFromFen } from "@/lib/eval";
 import type { AnalyzedMove, GameHeaders, OpeningContext } from "@/lib/types";
 import { useExplanation } from "@/hooks/useExplanation";
 import { GameReview } from "@/components/GameReview";
+import { PlayerProfileCard } from "@/components/PlayerProfileCard";
 
 type Props = {
   move: AnalyzedMove | null;
@@ -85,12 +86,19 @@ export function AnalysisPanel({
       ) : null}
 
       {gameAnalysisComplete && analyzed ? (
-        <GameReview
-          analyzed={analyzed}
-          headers={gameHeaders}
-          mistakeMoves={mistakeMoves}
-          onTrainMistakes={onTrainMistakes}
-        />
+        <>
+          <PlayerProfileCard
+            key={`${gameHeaders.White ?? "White"}:${analyzed.length}:${analyzed.at(-1)?.afterFen ?? ""}`}
+            analyzed={analyzed}
+            headers={gameHeaders}
+          />
+          <GameReview
+            analyzed={analyzed}
+            headers={gameHeaders}
+            mistakeMoves={mistakeMoves}
+            onTrainMistakes={onTrainMistakes}
+          />
+        </>
       ) : null}
 
       <div className="grid grid-cols-2 gap-3 text-sm">
