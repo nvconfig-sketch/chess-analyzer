@@ -1,5 +1,6 @@
 "use client";
 
+import { Chess } from "chess.js";
 import { CLASSIFICATION_META } from "@/lib/classify";
 import { formatWhiteCp, whiteCpFromFen } from "@/lib/eval";
 import type { AnalyzedMove, GameHeaders, OpeningContext } from "@/lib/types";
@@ -9,6 +10,9 @@ import { PlayerProfileCard } from "@/components/PlayerProfileCard";
 
 type Props = {
   move: AnalyzedMove | null;
+  currentMoveIndex: number;
+  selectedFen: string;
+  totalMoves: number;
   analyzing: boolean;
   progress: { done: number; total: number };
   engineReady: boolean;
@@ -26,6 +30,9 @@ type Props = {
 
 export function AnalysisPanel({
   move,
+  currentMoveIndex,
+  selectedFen,
+  totalMoves,
   analyzing,
   progress,
   engineReady,
@@ -40,8 +47,42 @@ export function AnalysisPanel({
   gameHeaders,
   gameAnalysisComplete,
 }: Props) {
-  const explanation = useExplanation(move, opening);
-  const meta = move ? CLASSIFICATION_META[move.classification] : null;
+  const selectedMove =
+    currentMoveIndex > 0
+      ? analyzed?.[currentMoveIndex - 1] ??
+        (move?.ply === currentMoveIndex ? move : null)
+      : null;
+  const selectedPosition = new Chess(selectedFen);
+  const atGameEnd = currentMoveIndex >= totalMoves;
+  const recordedResult = atGameEnd
+    ? gameHeaders.Result
+    : undefined;
+  const hasRecordedResult = recordedResult === "1-0" ||
+    recordedResult === "0-1" ||
+    recordedResult === "1/2-1/2";
+  const checkmate = selectedPosition.isCheckmate() ||
+    (atGameEnd && selectedMove?.san.includes("#") === true);
+  const gameOver = checkmate || selectedPosition.isGameOver() || hasRecordedResult;
+  const gameOverText = checkmate
+    ? "Checkmate."
+    : recordedResult === "1/2-1/2" || selectedPosition.isDraw()
+      ? "Game over — draw."
+      : recordedResult === "1-0"
+        ? "Game over — White wins."
+        : recordedResult === "0-1"
+          ? "Game over — Black wins."
+          : "Game over.";
+  const gameOverTextHe = checkmate
+    ? "מט."
+    : gameOverText === "Game over — draw."
+      ? "המשחק הסתיים בתיקו."
+      : gameOverText === "Game over — White wins."
+        ? "המשחק הסתיים בניצחון ללבן."
+        : gameOverText === "Game over — Black wins."
+          ? "המשחק הסתיים בניצחון לשחור."
+          : "המשחק הסתיים.";
+  const explanation = useExplanation(gameOver ? null : selectedMove, opening);
+  const meta = selectedMove ? CLASSIFICATION_META[selectedMove.classification] : null;
 
   return (
     <section className="flex flex-col gap-4 rounded-2xl border border-zinc-200/80 bg-white/80 p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/70">
@@ -156,20 +197,20 @@ export function AnalysisPanel({
         </div>
       ) : null}
 
-      {move && meta ? (
+      {selectedMove && meta ? (
         <div className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-700">
           <div className="flex items-center justify-between">
             <p className="font-semibold">
-              {move.color === "w" ? "White" : "Black"} played {move.san}
+              {selectedMove.color === "w" ? "White" : "Black"} played {selectedMove.san}
             </p>
             <span className={`text-sm font-semibold ${meta.color}`}>
               {meta.glyph} {meta.label}
             </span>
           </div>
           <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
-            Eval loss {move.evalLossCp === null ? "—" : `${(move.evalLossCp / 100).toFixed(2)} pawns`}
-            {move.bestMoveSan ? ` · Engine: ${move.bestMoveSan}` : ""}
-            {` · After: ${formatWhiteCp(whiteCpFromFen(move.afterFen, move.evalAfter))}`}
+            Eval loss {selectedMove.evalLossCp === null ? "—" : `${(selectedMove.evalLossCp / 100).toFixed(2)} pawns`}
+            {selectedMove.bestMoveSan ? ` · Engine: ${selectedMove.bestMoveSan}` : ""}
+            {` · After: ${formatWhiteCp(whiteCpFromFen(selectedMove.afterFen, selectedMove.evalAfter))}`}
           </p>
         </div>
       ) : (
@@ -181,7 +222,7 @@ export function AnalysisPanel({
       <div>
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">
-            Verbal explanation
+            {gameOver ? "Checkmate / Game Over" : "Verbal explanation"}
           </h3>
           <div
             className="inline-flex rounded-md border border-zinc-300 p-0.5 dark:border-zinc-700"
@@ -205,7 +246,13 @@ export function AnalysisPanel({
             ))}
           </div>
         </div>
-        {explanation.loading ? (
+        {gameOver ? (
+          <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-zinc-700 dark:text-zinc-300">
+            <span lang="en" dir="ltr">{gameOverText}</span>
+            <span className="mx-2" aria-hidden="true">·</span>
+            <span lang="he" dir="rtl">{gameOverTextHe}</span>
+          </p>
+        ) : explanation.loading ? (
           <p className="mt-2 text-sm text-zinc-500">Writing a coach note…</p>
         ) : explanation.error ? (
           <p className="mt-2 text-sm text-rose-500">{explanation.error}</p>

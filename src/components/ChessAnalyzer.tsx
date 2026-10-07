@@ -258,6 +258,9 @@ export function ChessAnalyzer() {
           />
           <AnalysisPanel
             move={currentAnalysis}
+            currentMoveIndex={gameState.ply}
+            selectedFen={gameState.fen}
+            totalMoves={gameState.game.moves.length}
             analyzing={analysis.analyzing}
             progress={analysis.progress}
             engineReady={analysis.engineReady}
