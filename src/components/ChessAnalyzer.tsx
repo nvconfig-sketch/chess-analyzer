@@ -84,13 +84,12 @@ export function ChessAnalyzer() {
             : null
       );
   const displayedLastMove = training.active ? trainingLastMove : lastMove;
-      const lastMoveSquares = displayedLastMove
+  const lastMoveSquares = displayedLastMove
     ? {
-            [displayedLastMove.from]: { backgroundColor: "#facc15", opacity: 0.75, zIndex: 10 },
-            [displayedLastMove.to]: { backgroundColor: "#facc15", opacity: 0.75, zIndex: 10 },
+        [displayedLastMove.from]: { backgroundColor: "#facc15", opacity: 0.75, zIndex: 10 },
+        [displayedLastMove.to]: { backgroundColor: "#facc15", opacity: 0.75, zIndex: 10 },
       }
     : undefined;
-      const customSquareStyleOptions = { customSquareStyles: lastMoveSquares };
 
   const best = training.active
     ? training.feedback?.bestMoveUci ?? null
@@ -104,8 +103,6 @@ export function ChessAnalyzer() {
         },
       ]
     : [];
-
-  console.log("Highlighting squares:", lastMoveSquares);
 
   return (
     <div className="min-h-full bg-zinc-100 text-zinc-900 dark:bg-[#0b0f14] dark:text-zinc-100">
@@ -138,6 +135,14 @@ export function ChessAnalyzer() {
           <div className="relative flex min-w-0 items-start gap-2 rounded-xl border border-zinc-200/80 bg-white/80 p-2 shadow-sm sm:gap-3 sm:rounded-2xl sm:p-3 dark:border-zinc-800 dark:bg-zinc-900/70">
             <EvalBar percent={evalBarPercent(whiteCp)} label={formatWhiteCp(whiteCp)} />
             <div className="relative aspect-square min-w-0 flex-1">
+              {displayedLastMove ? (
+                <style>{`
+                  [data-square="${displayedLastMove.from}"],
+                  [data-square="${displayedLastMove.to}"] {
+                    background-color: rgba(250, 204, 21, 0.75) !important;
+                  }
+                `}</style>
+              ) : null}
               <Chessboard
                 options={{
                   position: boardFen,
@@ -147,7 +152,6 @@ export function ChessAnalyzer() {
                     ? ({ square }) => training.canDragPiece(square)
                     : undefined,
                   squareStyles: lastMoveSquares,
-                  ...customSquareStyleOptions,
                   squareRenderer: ({ children, square }) => {
                     const badge =
                       !training.active && currentAnalysis && square === currentAnalysis.to
