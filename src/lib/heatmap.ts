@@ -13,9 +13,9 @@ export type SquareControl = {
   style: CSSProperties;
 };
 
-export function calculateSquareControl(
+export function calculateHeatmap(
   fen: string,
-  playerColor: Color,
+  playerPerspective: Color = "w",
 ): Record<Square, SquareControl> {
   const chess = new Chess(fen);
 
@@ -23,8 +23,8 @@ export function calculateSquareControl(
     SQUARES.map((square) => {
       const white = chess.attackers(square, "w").length;
       const black = chess.attackers(square, "b").length;
-      const player = playerColor === "w" ? white : black;
-      const opponent = playerColor === "w" ? black : white;
+      const player = playerPerspective === "w" ? white : black;
+      const opponent = playerPerspective === "w" ? black : white;
       const contested = player > 0 && opponent > 0 && player === opponent;
       const backgroundColor =
         contested

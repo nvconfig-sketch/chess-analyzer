@@ -2,7 +2,6 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
-import type { Color } from "chess.js";
 import { AiSettings } from "@/components/AiSettings";
 import { AnalysisPanel } from "@/components/AnalysisPanel";
 import { GameExport } from "@/components/GameExport";
@@ -22,7 +21,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { CLASSIFICATION_BADGES } from "@/lib/classification-badges";
 import { evalBarPercent, formatWhiteCp, whiteCpFromFen } from "@/lib/eval";
 import { gameTitle } from "@/lib/game";
-import { calculateSquareControl, squareControlCss } from "@/lib/heatmap";
+import { calculateHeatmap, squareControlCss } from "@/lib/heatmap";
 
 const Chessboard = dynamic(
   () => import("react-chessboard").then((mod) => mod.Chessboard),
@@ -87,10 +86,9 @@ export function ChessAnalyzer() {
             : null
       );
   const displayedLastMove = training.active ? trainingLastMove : lastMove;
-  const playerColor: Color = boardFen.split(" ")[1] === "b" ? "b" : "w";
   const squareControls = useMemo(
-    () => showHeatmap ? calculateSquareControl(boardFen, playerColor) : null,
-    [boardFen, playerColor, showHeatmap],
+    () => showHeatmap ? calculateHeatmap(boardFen, "w") : null,
+    [boardFen, showHeatmap],
   );
   const lastMoveSquareNames = displayedLastMove
     ? [displayedLastMove.from, displayedLastMove.to]
