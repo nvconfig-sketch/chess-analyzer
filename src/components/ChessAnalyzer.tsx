@@ -68,15 +68,26 @@ export function ChessAnalyzer() {
   const boardFen = training.active
     ? training.replayFen ?? training.correctionFen ?? training.positionFen ?? gameState.fen
     : gameState.fen;
-  const squareStyles = training.active && training.feedback
+  const replayedMove = training.replaying
+    ? gameState.game.moves.find((move) => move.afterFen === training.replayFen)
+    : null;
+  const trainingLastMove = training.correctionExecuted && training.feedback?.bestMoveUci
     ? {
-        [training.feedback.guessedFrom]: { backgroundColor: "rgba(245, 158, 11, 0.4)" },
-        [training.feedback.guessedTo]: { backgroundColor: "rgba(245, 158, 11, 0.6)" },
+        from: training.feedback.bestMoveUci.slice(0, 2),
+        to: training.feedback.bestMoveUci.slice(2, 4),
       }
-    : lastMove && !training.active
+    : replayedMove ?? (
+        training.feedback
+          ? { from: training.feedback.guessedFrom, to: training.feedback.guessedTo }
+          : training.ply > 0
+            ? gameState.game.moves[training.ply - 1]
+            : null
+      );
+  const displayedLastMove = training.active ? trainingLastMove : lastMove;
+  const squareStyles = displayedLastMove
     ? {
-        [lastMove.from]: { backgroundColor: "rgba(16, 185, 129, 0.35)" },
-        [lastMove.to]: { backgroundColor: "rgba(16, 185, 129, 0.55)" },
+        [displayedLastMove.from]: { backgroundColor: "rgba(255, 255, 0, 0.4)" },
+        [displayedLastMove.to]: { backgroundColor: "rgba(255, 255, 0, 0.4)" },
       }
     : undefined;
 
