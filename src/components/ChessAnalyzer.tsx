@@ -84,12 +84,13 @@ export function ChessAnalyzer() {
             : null
       );
   const displayedLastMove = training.active ? trainingLastMove : lastMove;
-  const squareStyles = displayedLastMove
+      const lastMoveSquares = displayedLastMove
     ? {
-        [displayedLastMove.from]: { backgroundColor: "rgba(255, 255, 0, 0.4)" },
-        [displayedLastMove.to]: { backgroundColor: "rgba(255, 255, 0, 0.4)" },
+            [displayedLastMove.from]: { backgroundColor: "#facc15", opacity: 0.75, zIndex: 10 },
+            [displayedLastMove.to]: { backgroundColor: "#facc15", opacity: 0.75, zIndex: 10 },
       }
     : undefined;
+      const customSquareStyleOptions = { customSquareStyles: lastMoveSquares };
 
   const best = training.active
     ? training.feedback?.bestMoveUci ?? null
@@ -103,6 +104,8 @@ export function ChessAnalyzer() {
         },
       ]
     : [];
+
+  console.log("Highlighting squares:", lastMoveSquares);
 
   return (
     <div className="min-h-full bg-zinc-100 text-zinc-900 dark:bg-[#0b0f14] dark:text-zinc-100">
@@ -143,7 +146,8 @@ export function ChessAnalyzer() {
                   canDragPiece: training.active
                     ? ({ square }) => training.canDragPiece(square)
                     : undefined,
-                  squareStyles,
+                  squareStyles: lastMoveSquares,
+                  ...customSquareStyleOptions,
                   squareRenderer: ({ children, square }) => {
                     const badge =
                       !training.active && currentAnalysis && square === currentAnalysis.to
