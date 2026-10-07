@@ -2,6 +2,16 @@ import { NextResponse } from "next/server";
 import { localExplanation } from "@/lib/local-explanation";
 import type { BilingualExplanation, ExplainRequest } from "@/lib/types";
 
+function inferGamePhase(fen: string): ExplainRequest["gamePhase"] {
+  const [boardPart] = fen.split(" ");
+  const activePieces = boardPart.replace(/[1-8/]/g, "");
+  const totalPieces = activePieces.length;
+
+  if (totalPieces <= 10) return "endgame";
+  if (totalPieces >= 20) return "opening";
+  return "middlegame";
+}
+
 export async function POST(request: Request) {
   const body = (await request.json()) as ExplainRequest;
   if (!body?.fen || !body.moveSan) {
@@ -16,6 +26,7 @@ export async function POST(request: Request) {
     });
   }
 
+  const gamePhase = body.gamePhase ?? inferGamePhase(body.fen);
   const openingContext = body.opening?.status === "in-book"
     ? `IN BOOK. Official English name: ${body.opening.nameEn ?? "unknown"}. Official Hebrew name: ${body.opening.nameHe ?? "unknown"}. ECO: ${body.opening.eco ?? "unknown"}.`
     : body.opening?.status === "out-of-book"
@@ -24,25 +35,26 @@ export async function POST(request: Request) {
         : `OPEN GAME AFTER THEORY. The first deviation was an earlier move (${body.opening.deviationPly ?? "unknown"} ${body.opening.deviationMove ?? "unknown"}). Do not repeat or mention the first-deviation/out-of-book alert in this explanation; analyze this move normally.`
       : "Opening data is unavailable; do not claim that the move is in or out of book and do not invent an opening name.";
 
-  const prompt = `You are a bilingual chess coach for a club player (around 1200-1800). Focus primarily on strategic intent and plans, not a static description of what a move controls. Analyze the position and explain what the player is trying to achieve, the longer-term plan this move supports, and what it prepares for the next few turns. Consider goals such as creating space, targeting a weakness, preparing a pawn break, improving piece activity, coordinating pieces, or addressing a threat. Explain why the move's classification fits, but do not let engine numbers replace strategic analysis. Ground claims in the supplied position and best move; do not invent a tactic or continuation that the position does not support. If the exact plan is uncertain, describe the most plausible positional aim cautiously.
+  const prompt = `You are an expert chess coach for an ambitious club player. Give concise but practical coaching advice grounded in this exact position. Focus on the move's strategic purpose, the immediate tactical risks and opportunities, and the most useful next practical recommendation. Do not invent long tactical lines that are not supported by the position. If the opening information is available, mention it naturally when it matters; otherwise do not claim a named opening. Keep your advice clear and constructive.
 
 Position FEN: ${body.fen}
 Side that moved: ${body.side}
 Move played: ${body.moveSan} (${body.moveLan})
 Engine classification: ${body.classification}
-Engine eval before (White's view of the position they faced): ${body.evalBefore}
-Eval after: ${body.evalAfter}
+Live eval before: ${body.evalBefore}
+Live eval after: ${body.evalAfter}
 Eval loss vs best: ${body.evalDelta}
-Best engine move: ${body.bestMoveSan ?? body.bestMove ?? "unknown"}
+Stockfish top recommended move: ${body.bestMoveSan ?? body.bestMove ?? "unknown"}
 Opening book status and labels: ${openingContext}
+ECO opening name: ${body.opening?.eco ?? "unknown"}
+Game phase: ${gamePhase}
 
-Return only a valid JSON object with exactly these string properties: {"en":"English explanation","he":"Hebrew explanation"}. Each string must use these four labeled lines, in this order:
-Assessment: why this move is good, inaccurate, or forced, including the key consequence. If in book, include the official English opening name in "en" and its supplied official Hebrew label in "he". Only when the current move is explicitly marked FIRST DEVIATION MOVE, say exactly that it is the first move out of theory after the supplied opening and identify the move in both languages. For every later OPEN GAME AFTER THEORY move, do not repeat or mention the first-deviation/out-of-book alert; assess the current move normally. Never claim out of book when opening data is unavailable.
-Goal: what the player is trying to achieve strategically.
-Plan: how this move supports the longer-term plan or targets a weakness.
-Next: what the player is preparing to do in the next few turns, or what positional follow-up to look for.
+Return only a valid JSON object with exactly these string properties: {"en":"English explanation","he":"Hebrew explanation"}. Each string must use exactly these three labeled sections, in this order:
+Strategic Purpose: explain the move's deeper objective, what idea the player is trying to create, and why it helps in this position.
+Tactical/Risk Notes: summarize the leading concrete tactical idea, the most important risk, and any opponent resources the move addresses or invites.
+Practical Recommendation: tell the player what they should do next or how they should think about the move in practical terms.
 
-Use the exact English labels above in "en" and the Hebrew labels הערכה:, מטרה:, תוכנית:, המשך: in "he". Make the Hebrew a faithful, natural translation of all four ideas, not a shorter summary. Keep each line concise and use plain text without markdown.`;
+For the Hebrew version, use these labels in this order: מטרה אסטרטגית:, הערות טקטיות/סיכונים:, המלצה מעשית:. Make the Hebrew a faithful translation of the same ideas, not a shorter summary. Keep each section concise and plain text without markdown.`;
 
   try {
     const gemini = await fetch(
@@ -81,26 +93,26 @@ Use the exact English labels above in "en" and the Hebrew labels הערכה:, מ
     const openingTextValid =
       body.opening?.status === "in-book"
         ? Boolean(
-            body.opening.nameEn &&
-              body.opening.nameHe &&
-              explanation.en?.includes(body.opening.nameEn) &&
-              explanation.he?.includes(body.opening.nameHe),
+          body.opening.nameEn &&
+            body.opening.nameHe &&
+            explanation.en?.includes(body.opening.nameEn) &&
+            explanation.he?.includes(body.opening.nameHe),
           )
         : body.opening?.status === "out-of-book" && body.opening.isFirstDeviationMove
           ? Boolean(
-              explanation.en?.toLowerCase().includes("out of book") &&
-                explanation.he?.includes("מחוץ לתיאוריה") &&
-                (!body.opening.deviationMove ||
-                  (explanation.en?.includes(body.opening.deviationMove) &&
-                    explanation.he?.includes(body.opening.deviationMove))),
-            )
+            explanation.en?.toLowerCase().includes("out of book") &&
+              explanation.he?.includes("מחוץ לתיאוריה") &&
+              (!body.opening.deviationMove ||
+                (explanation.en?.includes(body.opening.deviationMove) &&
+                  explanation.he?.includes(body.opening.deviationMove))),
+          )
           : body.opening?.status === "out-of-book"
-            ? !(
-                explanation.en?.toLowerCase().includes("out of book") ||
-                explanation.en?.toLowerCase().includes("first move out of theory") ||
-                explanation.he?.includes("מחוץ לתיאוריה") ||
-                explanation.he?.includes("המסע הראשון מחוץ לתיאוריה")
-              )
+          ? !(
+              explanation.en?.toLowerCase().includes("out of book") ||
+              explanation.en?.toLowerCase().includes("first move out of theory") ||
+              explanation.he?.includes("מחוץ לתיאוריה") ||
+              explanation.he?.includes("המסע הראשון מחוץ לתיאוריה")
+            )
           : true;
 
     if (
@@ -108,10 +120,10 @@ Use the exact English labels above in "en" and the Hebrew labels הערכה:, מ
       typeof explanation.he !== "string" ||
       !explanation.en.trim() ||
       !explanation.he.trim() ||
-      !["Assessment:", "Goal:", "Plan:", "Next:"].every((label) =>
+      !["Strategic Purpose:", "Tactical/Risk Notes:", "Practical Recommendation:"].every((label) =>
         explanation.en?.includes(label),
       ) ||
-      !["הערכה:", "מטרה:", "תוכנית:", "המשך:"].every((label) =>
+      !["מטרה אסטרטגית:", "הערות טקטיות/סיכונים:", "המלצה מעשית:"].every((label) =>
         explanation.he?.includes(label),
       ) ||
       !openingTextValid

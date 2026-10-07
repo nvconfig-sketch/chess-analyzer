@@ -25,6 +25,13 @@ export type GuessFeedback = {
   bestMoveUci: string | null;
 };
 
+export type MistakeDrillSummary = {
+  total: number;
+  correct: number;
+  accuracy: number;
+  takeaways: string[];
+};
+
 type Props = {
   game: LoadedGame;
   initialPly: number;
@@ -36,7 +43,15 @@ export function useGuessTheMove({ game, initialPly, analyzed, analyzePosition }:
   const aiSettings = useAiSettings();
   const requestController = useRef<AbortController | null>(null);
   const advanceTimer = useRef<number | null>(null);
+  const replayTimer = useRef<number | null>(null);
   const [active, setActive] = useState(false);
+  const [mistakeMode, setMistakeMode] = useState(false);
+  const [mistakeSequence, setMistakeSequence] = useState<number[]>([]);
+  const [mistakeProgress, setMistakeProgress] = useState(0);
+  const [replayFen, setReplayFen] = useState<string | null>(null);
+  const [replaying, setReplaying] = useState(false);
+  const [mistakeResults, setMistakeResults] = useState<boolean[]>([]);
+  const [mistakeSummary, setMistakeSummary] = useState<MistakeDrillSummary | null>(null);
   const [ply, setPly] = useState(0);
   const [checking, setChecking] = useState(false);
   const [feedback, setFeedback] = useState<GuessFeedback | null>(null);
@@ -51,11 +66,80 @@ export function useGuessTheMove({ game, initialPly, analyzed, analyzePosition }:
     return ply === 0 ? game.startFen : game.moves[ply - 1]?.afterFen ?? game.startFen;
   }, [active, game, guessedFen, ply]);
 
+  const startMistakeReplay = useCallback((targetPly: number) => {
+    if (replayTimer.current !== null) window.clearTimeout(replayTimer.current);
+    replayTimer.current = null;
+
+    const replayStartPly = Math.max(0, targetPly - 3);
+    const replayMoves = game.moves.slice(replayStartPly, targetPly);
+    if (replayMoves.length === 0) {
+      setReplayFen(null);
+      setReplaying(false);
+      return;
+    }
+
+    const startFen = replayStartPly === 0
+      ? game.startFen
+      : game.moves[replayStartPly - 1]?.afterFen ?? game.startFen;
+    let frame = 0;
+    setReplayFen(startFen);
+    setReplaying(true);
+
+    const advanceReplay = () => {
+      if (frame >= replayMoves.length) {
+        replayTimer.current = null;
+        setReplayFen(null);
+        setReplaying(false);
+        return;
+      }
+
+      setReplayFen(replayMoves[frame].afterFen);
+      frame += 1;
+      replayTimer.current = window.setTimeout(advanceReplay, 650);
+    };
+
+    replayTimer.current = window.setTimeout(advanceReplay, 650);
+  }, [game.moves, game.startFen]);
+
+  useEffect(() => () => {
+    if (replayTimer.current !== null) window.clearTimeout(replayTimer.current);
+  }, []);
+
+  const summarizeMistakeDrill = useCallback((results: boolean[]): MistakeDrillSummary => {
+    const total = results.length;
+    const correct = results.filter(Boolean).length;
+    const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0;
+    const takeaways =
+      accuracy >= 70
+        ? [
+            "Strong tactical awareness on the key moments.",
+            "Keep spotting the critical defensive resource before moving on.",
+          ]
+        : accuracy >= 40
+          ? [
+              "Good instincts, but a few positions still needed calmer evaluation.",
+              "Try to look for the opponent's most forcing move before choosing a plan.",
+            ]
+          : [
+              "The critical mistakes are recurring in high-pressure spots.",
+              "Slow down and calculate checks, captures, and the opponent's counterplay before committing.",
+            ];
+
+    return { total, correct, accuracy, takeaways };
+  }, []);
+
   const start = useCallback(() => {
     if (game.moves.length === 0) {
       setError("Load a game with moves before starting training.");
       return;
     }
+    setMistakeMode(false);
+    setMistakeSequence([]);
+    setMistakeProgress(0);
+    setMistakeResults([]);
+    setMistakeSummary(null);
+    setReplayFen(null);
+    setReplaying(false);
     setPly(Math.min(initialPly, game.moves.length - 1));
     setFeedback(null);
     setGuessedFen(null);
@@ -63,12 +147,44 @@ export function useGuessTheMove({ game, initialPly, analyzed, analyzePosition }:
     setActive(true);
   }, [game.moves.length, initialPly]);
 
+  const startMistakes = useCallback((moveIndices: number[]) => {
+    const sanitized = [...new Set(moveIndices)]
+      .filter((index) => Number.isInteger(index) && index >= 0 && index < game.moves.length)
+      .sort((left, right) => left - right);
+
+    if (sanitized.length === 0) {
+      setError("No mistake positions were found in this game.");
+      return;
+    }
+
+    setMistakeMode(true);
+    setMistakeSequence(sanitized);
+    setMistakeProgress(0);
+    setMistakeResults([]);
+    setMistakeSummary(null);
+    setPly(sanitized[0]);
+    setFeedback(null);
+    setGuessedFen(null);
+    setError(null);
+    setActive(true);
+    startMistakeReplay(sanitized[0]);
+  }, [game.moves.length, startMistakeReplay]);
+
   const stop = useCallback(() => {
     if (advanceTimer.current) window.clearTimeout(advanceTimer.current);
     advanceTimer.current = null;
+    if (replayTimer.current !== null) window.clearTimeout(replayTimer.current);
+    replayTimer.current = null;
     requestController.current?.abort();
     requestController.current = null;
     setActive(false);
+    setMistakeMode(false);
+    setMistakeSequence([]);
+    setMistakeProgress(0);
+    setReplayFen(null);
+    setReplaying(false);
+    setMistakeResults([]);
+    setMistakeSummary(null);
     setChecking(false);
     setFeedback(null);
     setGuessedFen(null);
@@ -191,6 +307,9 @@ export function useGuessTheMove({ game, initialPly, analyzed, analyzePosition }:
         source,
         bestMoveUci: preAnalysis?.bestMove ?? null,
       });
+      if (active && mistakeMode) {
+        setMistakeResults((current) => [...current, correct]);
+      }
     } catch (cause) {
       if (!controller.signal.aborted) {
         setGuessedFen(null);
@@ -208,10 +327,10 @@ export function useGuessTheMove({ game, initialPly, analyzed, analyzePosition }:
         setChecking(false);
       }
     }
-  }, [active, aiSettings, analyzed, analyzePosition, checking, feedback, ply, positionFen]);
+  }, [active, aiSettings, analyzed, analyzePosition, checking, feedback, mistakeMode, ply, positionFen]);
 
   const onPieceDrop = useCallback(({ sourceSquare, targetSquare }: PieceDropHandlerArgs) => {
-    if (!targetSquare || !positionFen || feedback || checking) return false;
+    if (!targetSquare || !positionFen || feedback || checking || replaying) return false;
     if (needsPromotion(positionFen, sourceSquare, targetSquare)) {
       setPendingPromotion({ from: sourceSquare, to: targetSquare });
       return false;
@@ -222,20 +341,43 @@ export function useGuessTheMove({ game, initialPly, analyzed, analyzePosition }:
     }
     void submitGuess(sourceSquare, targetSquare);
     return true;
-  }, [checking, feedback, positionFen, submitGuess]);
+  }, [checking, feedback, positionFen, replaying, submitGuess]);
 
   const next = useCallback(() => {
     if (advanceTimer.current) window.clearTimeout(advanceTimer.current);
     advanceTimer.current = null;
     setFeedback(null);
     setError(null);
+
+    if (mistakeMode && mistakeSequence.length > 0) {
+      const nextProgress = mistakeProgress + 1;
+      if (nextProgress >= mistakeSequence.length) {
+        if (replayTimer.current !== null) window.clearTimeout(replayTimer.current);
+        replayTimer.current = null;
+        const summary = summarizeMistakeDrill(mistakeResults);
+        setMistakeSummary(summary);
+        setActive(false);
+        setMistakeMode(false);
+        setMistakeProgress(0);
+        setMistakeResults([]);
+        setReplayFen(null);
+        setReplaying(false);
+        setGuessedFen(null);
+        return;
+      }
+      setMistakeProgress(nextProgress);
+      setPly(mistakeSequence[nextProgress]);
+      startMistakeReplay(mistakeSequence[nextProgress]);
+      return;
+    }
+
     if (ply + 1 >= game.moves.length) {
       setActive(false);
       setGuessedFen(null);
       return;
     }
     setPly(ply + 1);
-  }, [game.moves.length, ply]);
+  }, [game.moves.length, mistakeMode, mistakeProgress, mistakeResults, mistakeSequence, ply, startMistakeReplay, summarizeMistakeDrill]);
 
   useEffect(() => {
     if (!active || !feedback?.correct) return;
@@ -252,17 +394,26 @@ export function useGuessTheMove({ game, initialPly, analyzed, analyzePosition }:
 
   return {
     active,
+    mistakeMode,
+    mistakeSequence,
+    mistakeProgress,
     ply,
     targetMove,
     positionFen,
+    replayFen,
+    replaying,
+    replayMistake: () => startMistakeReplay(ply),
+    replayMoveCount: Math.min(3, ply),
     currentAnalysis,
     checking,
     feedback,
     error,
     pendingPromotion,
     language,
+    mistakeSummary,
     setLanguage,
     start,
+    startMistakes,
     stop,
     next,
     onPieceDrop,

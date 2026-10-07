@@ -7,6 +7,13 @@ import { lanToSan } from "@/lib/game";
 import { StockfishEngine } from "@/lib/stockfish-engine";
 import type { EngineAnalysis } from "@/lib/stockfish-engine";
 
+export function findMistakeMoves(moves: AnalyzedMove[]): AnalyzedMove[] {
+  return moves.filter((move) => {
+    if (move.classification === "blunder") return true;
+    return move.evalLossCp !== null && move.evalLossCp > 150;
+  });
+}
+
 export function useGameAnalysis() {
   const engineRef = useRef<StockfishEngine | null>(null);
   const [engineReady, setEngineReady] = useState(false);
@@ -14,6 +21,7 @@ export function useGameAnalysis() {
   const [analyzing, setAnalyzing] = useState(false);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [analyzed, setAnalyzed] = useState<AnalyzedMove[] | null>(null);
+  const [mistakeMoves, setMistakeMoves] = useState<AnalyzedMove[]>([]);
   const [liveEval, setLiveEval] = useState<AnalyzedMove | null>(null);
   const cancelled = useRef(false);
 
@@ -66,6 +74,7 @@ export function useGameAnalysis() {
         });
         setProgress({ done: i + 1, total: game.moves.length });
         setAnalyzed([...results]);
+        setMistakeMoves(findMistakeMoves(results));
       }
     } catch (error) {
       setEngineError(error instanceof Error ? error.message : "Analysis failed");
@@ -113,12 +122,14 @@ export function useGameAnalysis() {
     analyzing,
     progress,
     analyzed,
+    mistakeMoves,
     liveEval,
     analyzeGame,
     analyzeLive,
     analyzePosition,
     resetAnalysis: () => {
       setAnalyzed(null);
+      setMistakeMoves([]);
       setLiveEval(null);
       setProgress({ done: 0, total: 0 });
     },

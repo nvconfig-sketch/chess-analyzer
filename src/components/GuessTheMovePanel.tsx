@@ -1,5 +1,6 @@
 "use client";
 
+import { MistakeDrillSummary } from "@/components/MistakeDrillSummary";
 import { CLASSIFICATION_META } from "@/lib/classify";
 import type { useGuessTheMove } from "@/hooks/useGuessTheMove";
 
@@ -12,6 +13,55 @@ type Props = {
 };
 
 export function GuessTheMovePanel({ training, engineReady, totalMoves }: Props) {
+  const sessionTotal = training.mistakeMode ? training.mistakeSequence.length : totalMoves;
+  const sessionPosition = training.mistakeMode ? training.mistakeProgress + 1 : training.ply + 1;
+
+  if (training.mistakeSummary) {
+    return (
+      <>
+        <MistakeDrillSummary
+          summary={training.mistakeSummary}
+          onClose={() => {
+            training.stop();
+          }}
+          onRetry={() => {
+            if (training.mistakeSequence.length > 0) {
+              training.startMistakes(training.mistakeSequence);
+            }
+          }}
+        />
+        <section className="rounded-xl border border-emerald-200/80 bg-emerald-50/70 p-3 dark:border-emerald-900/70 dark:bg-emerald-950/20">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+                Guess the Move / נחשו את המסע
+              </h2>
+              <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+                Find Stockfish&apos;s best move at each position before it is revealed.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={training.start}
+              disabled={!engineReady || totalMoves === 0}
+              className="min-h-11 shrink-0 rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-emerald-600"
+            >
+              Start training
+            </button>
+          </div>
+          {!engineReady ? (
+            <p className="mt-2 text-xs text-zinc-500">Waiting for Stockfish…</p>
+          ) : null}
+          {training.error ? (
+            <p className="mt-2 text-sm text-rose-600 dark:text-rose-400" role="alert">
+              {training.error}
+            </p>
+          ) : null}
+        </section>
+      </>
+    );
+  }
+
   if (!training.active) {
     return (
       <section className="rounded-xl border border-emerald-200/80 bg-emerald-50/70 p-3 dark:border-emerald-900/70 dark:bg-emerald-950/20">
@@ -59,18 +109,36 @@ export function GuessTheMovePanel({ training, engineReady, totalMoves }: Props) 
             Guess the Move / נחשו את המסע
           </h2>
           <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
-            Position {Math.min(training.ply + 1, totalMoves)} / {totalMoves} · Find the engine&apos;s best move
+            {training.mistakeMode ? "Mistake drill / תרגיל טעויות · " : ""}
+            Position {Math.min(sessionPosition, sessionTotal)} / {sessionTotal} · Find the engine&apos;s best move
           </p>
         </div>
-        <button
-          type="button"
-          onClick={training.stop}
-          className="min-h-11 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium dark:border-zinc-700"
-        >
-          Exit training
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {training.mistakeMode && training.replayMoveCount > 0 && !training.feedback ? (
+            <button
+              type="button"
+              onClick={training.replayMistake}
+              disabled={training.replaying || training.checking}
+              className="min-h-11 rounded-lg border border-emerald-700 px-3 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-emerald-500 dark:text-emerald-200 dark:hover:bg-emerald-950/50"
+            >
+              Replay sequence
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={training.stop}
+            className="min-h-11 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium dark:border-zinc-700"
+          >
+            Exit training
+          </button>
+        </div>
       </div>
 
+      {training.replaying ? (
+        <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-300" role="status">
+          Replaying the previous moves… / מציגים מחדש את המסעים הקודמים…
+        </p>
+      ) : null}
       {training.checking ? (
         <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-300" role="status">
           Checking your move… / בודקים את המסע…
@@ -146,7 +214,13 @@ export function GuessTheMovePanel({ training, engineReady, totalMoves }: Props) 
             onClick={training.next}
             className="mt-3 min-h-11 w-full rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-600 dark:bg-emerald-600"
           >
-            {training.ply + 1 >= totalMoves ? "Finish training / סיום אימון" : "Next position / העמדה הבאה"}
+            {training.mistakeMode
+              ? training.mistakeProgress + 1 >= sessionTotal
+                ? "Finish training / סיום אימון"
+                : "Next position / העמדה הבאה"
+              : training.ply + 1 >= totalMoves
+                ? "Finish training / סיום אימון"
+                : "Next position / העמדה הבאה"}
           </button>
         </div>
       ) : !training.checking ? (

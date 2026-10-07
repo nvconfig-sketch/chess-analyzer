@@ -8,9 +8,11 @@ import type { AnalyzedMove, BilingualExplanation, GameHeaders } from "@/lib/type
 type Props = {
   analyzed: AnalyzedMove[];
   headers: GameHeaders;
+  mistakeMoves?: AnalyzedMove[];
+  onTrainMistakes?: () => void;
 };
 
-export function GameReview({ analyzed, headers }: Props) {
+export function GameReview({ analyzed, headers, mistakeMoves = [], onTrainMistakes }: Props) {
   const settings = useAiSettings();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const controllerRef = useRef<AbortController | null>(null);
@@ -67,14 +69,25 @@ export function GameReview({ analyzed, headers }: Props) {
             </p>
           ) : null}
         </div>
-        <button
-          type="button"
-          onClick={() => void generate()}
-          disabled={!apiKey || loading}
-          className="min-h-11 shrink-0 rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-emerald-600 dark:hover:bg-emerald-500"
-        >
-          Generate game review
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {mistakeMoves.length > 0 && onTrainMistakes ? (
+            <button
+              type="button"
+              onClick={onTrainMistakes}
+              className="min-h-11 shrink-0 rounded-lg border border-amber-500 bg-amber-100 px-3 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-200 dark:border-amber-400 dark:bg-amber-500/10 dark:text-amber-200 dark:hover:bg-amber-500/20"
+            >
+              Train on mistakes ({mistakeMoves.length})
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => void generate()}
+            disabled={!apiKey || loading}
+            className="min-h-11 shrink-0 rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+          >
+            Generate game review
+          </button>
+        </div>
       </div>
 
       <dialog

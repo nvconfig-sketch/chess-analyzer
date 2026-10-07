@@ -89,4 +89,5 @@ export type ExplainRequest = {
   evalDelta: string;
   side: "White" | "Black";
   opening?: OpeningBookContext | null;
+  gamePhase?: "opening" | "middlegame" | "endgame";
 };

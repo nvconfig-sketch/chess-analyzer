@@ -17,6 +17,8 @@ type Props = {
   liveEval: string;
   opening: OpeningContext | null;
   analyzed: AnalyzedMove[] | null;
+  mistakeMoves: AnalyzedMove[];
+  onTrainMistakes?: () => void;
   gameHeaders: GameHeaders;
   gameAnalysisComplete: boolean;
 };
@@ -32,6 +34,8 @@ export function AnalysisPanel({
   liveEval,
   opening,
   analyzed,
+  mistakeMoves,
+  onTrainMistakes,
   gameHeaders,
   gameAnalysisComplete,
 }: Props) {
@@ -81,7 +85,12 @@ export function AnalysisPanel({
       ) : null}
 
       {gameAnalysisComplete && analyzed ? (
-        <GameReview analyzed={analyzed} headers={gameHeaders} />
+        <GameReview
+          analyzed={analyzed}
+          headers={gameHeaders}
+          mistakeMoves={mistakeMoves}
+          onTrainMistakes={onTrainMistakes}
+        />
       ) : null}
 
       <div className="grid grid-cols-2 gap-3 text-sm">

@@ -65,7 +65,9 @@ export function ChessAnalyzer() {
   }, [gameState.fen, analysis.analyzing, analysis.engineReady]);
 
   const lastMove = gameState.currentMove;
-  const boardFen = training.active ? training.positionFen ?? gameState.fen : gameState.fen;
+  const boardFen = training.active
+    ? training.replayFen ?? training.positionFen ?? gameState.fen
+    : gameState.fen;
   const squareStyles = training.active && training.feedback
     ? {
         [training.feedback.guessedFrom]: { backgroundColor: "rgba(245, 158, 11, 0.4)" },
@@ -152,7 +154,7 @@ export function ChessAnalyzer() {
                   },
                   arrows,
                   allowDrawingArrows: true,
-                  animationDurationInMs: 180,
+                  animationDurationInMs: training.replaying ? 450 : 180,
                   boardStyle: {
                     borderRadius: "12px",
                     overflow: "hidden",
@@ -192,7 +194,7 @@ export function ChessAnalyzer() {
           <GuessTheMovePanel
             training={training}
             engineReady={analysis.engineReady}
-            totalMoves={gameState.game.moves.length}
+            totalMoves={training.mistakeMode ? training.mistakeSequence.length : gameState.game.moves.length}
           />
           {!training.active ? (
             <>
@@ -248,6 +250,10 @@ export function ChessAnalyzer() {
             liveEval={formatWhiteCp(whiteCp)}
             opening={opening}
             analyzed={analysis.analyzed}
+            mistakeMoves={analysis.mistakeMoves}
+            onTrainMistakes={() => {
+              training.startMistakes(analysis.mistakeMoves.map((move) => move.ply - 1));
+            }}
             gameHeaders={gameState.game.headers}
             gameAnalysisComplete={
               !analysis.analyzing &&
