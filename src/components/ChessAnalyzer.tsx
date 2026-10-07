@@ -31,6 +31,7 @@ const Chessboard = dynamic(
 export function ChessAnalyzer() {
   const { theme, toggleTheme } = useTheme();
   const [showHeatmap, setShowHeatmap] = useState(false);
+  const [boardOrientation, setBoardOrientation] = useState<"white" | "black">("white");
   const gameState = useChessGame();
   const analysis = useGameAnalysis();
   const training = useGuessTheMove({
@@ -86,9 +87,10 @@ export function ChessAnalyzer() {
             : null
       );
   const displayedLastMove = training.active ? trainingLastMove : lastMove;
+  const playerPerspective = boardOrientation === "white" ? "w" : "b";
   const squareControls = useMemo(
-    () => showHeatmap ? calculateHeatmap(boardFen, "w") : null,
-    [boardFen, showHeatmap],
+    () => showHeatmap ? calculateHeatmap(boardFen, playerPerspective) : null,
+    [boardFen, playerPerspective, showHeatmap],
   );
   const lastMoveSquareNames = displayedLastMove
     ? [displayedLastMove.from, displayedLastMove.to]
@@ -171,7 +173,19 @@ export function ChessAnalyzer() {
           <div className="relative flex min-w-0 items-start gap-2 rounded-xl border border-zinc-200/80 bg-white/80 p-2 shadow-sm sm:gap-3 sm:rounded-2xl sm:p-3 dark:border-zinc-800 dark:bg-zinc-900/70">
             <EvalBar percent={evalBarPercent(whiteCp)} label={formatWhiteCp(whiteCp)} />
             <div className="min-w-0 flex-1">
-              <div className="mb-2 flex justify-end">
+              <div className="mb-2 flex flex-wrap justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setBoardOrientation((orientation) =>
+                      orientation === "white" ? "black" : "white",
+                    )
+                  }
+                  aria-pressed={boardOrientation === "black"}
+                  className="inline-flex min-h-10 items-center rounded-lg border border-zinc-300 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                >
+                  Flip Board / הפוך לוח
+                </button>
                 <button
                   type="button"
                   onClick={() => setShowHeatmap((visible) => !visible)}
@@ -196,7 +210,7 @@ export function ChessAnalyzer() {
                 <Chessboard
                   options={{
                     position: boardFen,
-                    boardOrientation: "white",
+                    boardOrientation,
                     onPieceDrop: training.active ? training.onPieceDrop : gameState.onPieceDrop,
                     canDragPiece: training.active
                       ? ({ square }) => training.canDragPiece(square)
