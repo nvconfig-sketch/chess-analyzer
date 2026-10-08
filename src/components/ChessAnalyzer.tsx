@@ -19,7 +19,7 @@ import { useGuessTheMove } from "@/hooks/useGuessTheMove";
 import { useOpening } from "@/hooks/useOpening";
 import { useTheme } from "@/hooks/useTheme";
 import { CLASSIFICATION_BADGES } from "@/lib/classification-badges";
-import { evalBarPercent, formatWhiteCp, whiteCpFromFen } from "@/lib/eval";
+import { formatWhiteCp, whiteCpFromFen } from "@/lib/eval";
 import { gameTitle } from "@/lib/game";
 import { calculateHeatmap, squareControlCss } from "@/lib/heatmap";
 
@@ -171,7 +171,7 @@ export function ChessAnalyzer() {
       <main className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-3 py-4 sm:gap-6 sm:px-4 md:flex-row">
         <section className="flex min-w-0 w-full flex-col gap-4 md:flex-1">
           <div className="relative flex min-w-0 items-start gap-2 rounded-xl border border-zinc-200/80 bg-white/80 p-2 shadow-sm sm:gap-3 sm:rounded-2xl sm:p-3 dark:border-zinc-800 dark:bg-zinc-900/70">
-            <EvalBar percent={evalBarPercent(whiteCp)} label={formatWhiteCp(whiteCp)} />
+            <EvalBar whiteCp={whiteCp} boardOrientation={boardOrientation} />
             <div className="min-w-0 flex-1">
               <div className="mb-2 flex flex-wrap justify-end gap-2">
                 <button

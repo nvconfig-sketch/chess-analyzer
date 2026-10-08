@@ -1,21 +1,27 @@
 "use client";
 
+import { evalBarPercent, formatWhiteCp } from "@/lib/eval";
+
 type Props = {
-  percent: number;
-  label: string;
+  whiteCp: number | null;
+  boardOrientation: "white" | "black";
 };
 
-export function EvalBar({ percent, label }: Props) {
-  const whiteHeight = Math.max(2, Math.min(98, percent));
+export function EvalBar({ whiteCp, boardOrientation }: Props) {
+  const perspectiveCp =
+    boardOrientation === "white" || whiteCp === null ? whiteCp : -whiteCp;
+  const whiteHeight = Math.max(2, Math.min(98, evalBarPercent(whiteCp)));
+  const label = formatWhiteCp(perspectiveCp);
 
   return (
     <div className="flex flex-col items-center gap-2">
       <div
-        className="relative h-[min(72vw,520px)] w-5 overflow-hidden rounded-full border border-zinc-300 bg-zinc-950 sm:w-6 dark:border-zinc-700"
+        className={`relative h-[min(72vw,520px)] w-5 overflow-hidden rounded-full border border-zinc-300 bg-zinc-950 sm:w-6 dark:border-zinc-700 ${
+          boardOrientation === "black" ? "rotate-180" : ""
+        }`}
         title={label}
         aria-label={`Evaluation ${label}`}
       >
-        <div className="absolute inset-0 bg-zinc-950" />
         <div
           className="absolute bottom-0 left-0 right-0 bg-zinc-100 transition-[height] duration-300"
           style={{ height: `${whiteHeight}%` }}
