@@ -104,6 +104,7 @@ export function useExplanation(move: AnalyzedMove | null, opening: OpeningContex
       : null;
   return {
     text: result?.explanation[language] ?? null,
+    bilingual: result?.explanation ?? null,
     loading: move !== null && (opening?.status === "loading" || result === null),
     error: result?.error ?? null,
     source: result?.source ?? null,

@@ -4,12 +4,17 @@ import { Chess } from "chess.js";
 import { CLASSIFICATION_META } from "@/lib/classify";
 import { formatWhiteCp, whiteCpFromFen } from "@/lib/eval";
 import type { AnalyzedMove, GameHeaders, OpeningContext } from "@/lib/types";
+import type { LoadedGame } from "@/lib/types";
 import { useExplanation } from "@/hooks/useExplanation";
 import { GameReview } from "@/components/GameReview";
 import { PlayerProfileCard } from "@/components/PlayerProfileCard";
+import { createAnnotatedPgn } from "@/lib/export-pgn";
+import { gameTitle } from "@/lib/game";
+import { useState } from "react";
 
 type Props = {
   move: AnalyzedMove | null;
+  game: LoadedGame;
   currentMoveIndex: number;
   selectedFen: string;
   totalMoves: number;
@@ -30,6 +35,7 @@ type Props = {
 
 export function AnalysisPanel({
   move,
+  game,
   currentMoveIndex,
   selectedFen,
   totalMoves,
@@ -47,6 +53,7 @@ export function AnalysisPanel({
   gameHeaders,
   gameAnalysisComplete,
 }: Props) {
+  const [exportError, setExportError] = useState<string | null>(null);
   const selectedMove =
     currentMoveIndex > 0
       ? analyzed?.[currentMoveIndex - 1] ??
@@ -84,6 +91,30 @@ export function AnalysisPanel({
   const explanation = useExplanation(gameOver ? null : selectedMove, opening);
   const meta = selectedMove ? CLASSIFICATION_META[selectedMove.classification] : null;
 
+  const exportAnnotatedPgn = () => {
+    if (!analyzed) return;
+    try {
+      const explanations =
+        selectedMove && explanation.bilingual
+          ? { [selectedMove.ply]: explanation.bilingual }
+          : {};
+      const pgn = createAnnotatedPgn(game, analyzed, explanations);
+      const url = URL.createObjectURL(new Blob([pgn], { type: "application/x-chess-pgn;charset=utf-8" }));
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `${gameTitle(game.headers)
+        .replace(/[^a-z0-9_-]+/gi, "-")
+        .replace(/^-|-$/g, "") || "chess-game"}-analysis.pgn`;
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setExportError(null);
+    } catch (cause) {
+      setExportError(cause instanceof Error ? cause.message : "Could not export annotated PGN.");
+    }
+  };
+
   return (
     <section className="flex flex-col gap-4 rounded-2xl border border-zinc-200/80 bg-white/80 p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/70">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -95,16 +126,28 @@ export function AnalysisPanel({
             Stockfish 19 lite runs in your browser (WASM). Depth 12 for the full game.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={onAnalyze}
-          disabled={!engineReady || analyzing}
-          className="min-h-11 shrink-0 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-        >
-          {analyzing ? "Analyzing…" : "Analyze game"}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          {gameAnalysisComplete && analyzed ? (
+            <button
+              type="button"
+              onClick={exportAnnotatedPgn}
+              className="min-h-11 shrink-0 rounded-lg border border-emerald-700 px-3 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-50 dark:border-emerald-500 dark:text-emerald-200 dark:hover:bg-emerald-950/50"
+            >
+              Export Annotated PGN / הורד PGN מוער
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={onAnalyze}
+            disabled={!engineReady || analyzing}
+            className="min-h-11 shrink-0 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+          >
+            {analyzing ? "Analyzing…" : "Analyze game"}
+          </button>
+        </div>
       </div>
 
+      {exportError ? <p className="text-sm text-rose-500" role="alert">{exportError}</p> : null}
       {engineError ? <p className="text-sm text-rose-500">{engineError}</p> : null}
       {!engineReady && !engineError ? (
         <p className="text-sm text-zinc-500">Loading Stockfish…</p>
